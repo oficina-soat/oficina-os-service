@@ -78,4 +78,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado é migrar Pessoa, Usuário, Cliente, Veículo e Ordem de Serviço a partir de [../oficina-app](../oficina-app/), mantendo alinhamento com o [Plano de Decomposição do oficina-app](../oficina-platform/docs/oficina-app-decomposition.md).
+O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado é implementar histórico de estados, Outbox, publicação dos eventos de OS e consumo dos eventos de Billing e Execution, mantendo alinhamento com o [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md) e o [Padrão Outbox por Serviço](../oficina-platform/docs/outbox-pattern.md).
