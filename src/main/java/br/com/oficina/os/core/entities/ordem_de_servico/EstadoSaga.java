@@ -1,0 +1,15 @@
+package br.com.oficina.os.core.entities.ordem_de_servico;
+
+public enum EstadoSaga {
+    INICIADA,
+    EM_DIAGNOSTICO,
+    AGUARDANDO_ORCAMENTO,
+    AGUARDANDO_APROVACAO,
+    EM_EXECUCAO,
+    AGUARDANDO_PAGAMENTO,
+    AGUARDANDO_ENTREGA,
+    FINALIZADA_COM_SUCESSO,
+    EM_COMPENSACAO,
+    COMPENSADA,
+    FALHA_MANUAL
+}
