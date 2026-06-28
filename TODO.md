@@ -5,7 +5,7 @@
 - [x] Copiar e adaptar domínio de Pessoa e Usuário do `oficina-app`.
 - [x] Copiar e adaptar domínio de Cliente e Veículo.
 - [x] Copiar e adaptar domínio de Ordem de Serviço.
-- [ ] Alinhar controllers, presenters, DTOs e validações às rotas da [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
+- [x] Alinhar controllers, presenters, DTOs e validações às rotas da [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
 - [ ] Criar migrations e seed limpo para o database `oficina_os`.
 - [ ] Implementar histórico de estados conforme [Contrato de Estados da Ordem de Serviço](../oficina-platform/contracts/Contrato%20de%20Estados%20da%20Ordem%20de%20Serviço.md).
 - [ ] Implementar Outbox para eventos produzidos pelo serviço.

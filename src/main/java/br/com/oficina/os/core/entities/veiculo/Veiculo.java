@@ -1,14 +1,16 @@
 package br.com.oficina.os.core.entities.veiculo;
 
+import java.util.UUID;
+
 public final class Veiculo {
-    private final long id;
+    private final UUID id;
     private PlacaDeVeiculo placa;
     private MarcaDeVeiculo marca;
     private ModeloDeVeiculo modelo;
     private int ano;
 
     public Veiculo(
-            long id,
+            UUID id,
             PlacaDeVeiculo placa,
             MarcaDeVeiculo marca,
             ModeloDeVeiculo modelo,
@@ -27,7 +29,7 @@ public final class Veiculo {
         this.ano = dadosCorrigidos.ano();
     }
 
-    public long id() {
+    public UUID id() {
         return id;
     }
 

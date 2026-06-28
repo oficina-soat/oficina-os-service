@@ -6,8 +6,8 @@ import java.util.UUID;
 
 public class OrdemDeServicoFactory {
     public static OrdemDeServico criarNovo(
-            long clienteId,
-            long veiculoId) {
+            UUID clienteId,
+            UUID veiculoId) {
         return new OrdemDeServico(
                 UUID.randomUUID(),
                 clienteId,
@@ -19,8 +19,8 @@ public class OrdemDeServicoFactory {
 
     public static OrdemDeServico reconstituiCompleto(
             UUID id,
-            long clienteId,
-            long veiculoId,
+            UUID clienteId,
+            UUID veiculoId,
             EstadoDaOrdemDeServico estadoAtual,
             List<EstadoDaOrdemDeServico> historicoDeEstados,
             List<ItemPeca> pecas,
@@ -37,8 +37,8 @@ public class OrdemDeServicoFactory {
 
     public static OrdemDeServico reconstituiSimples(
             UUID id,
-            long clienteId,
-            long veiculoId,
+            UUID clienteId,
+            UUID veiculoId,
             EstadoDaOrdemDeServico estadoAtual) {
         return new OrdemDeServico(
                 id,

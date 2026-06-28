@@ -2,21 +2,24 @@ package br.com.oficina.os.core.entities.veiculo;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class VeiculoTest {
 
     @Test
     void deveCriarVeiculoECorrigirInformacoes() {
+        var veiculoId = UUID.randomUUID();
         var original = new Veiculo(
-                1L,
+                veiculoId,
                 new PlacaDeVeiculo("ABC1234"),
                 new MarcaDeVeiculo("Fiat"),
                 new ModeloDeVeiculo("Uno"),
                 2001);
 
         var corrigido = new Veiculo(
-                2L,
+                veiculoId,
                 new PlacaDeVeiculo("BRA1D23"),
                 new MarcaDeVeiculo("Toyota"),
                 new ModeloDeVeiculo("Corolla"),
@@ -24,7 +27,7 @@ class VeiculoTest {
 
         original.corrigeInformacoes(corrigido);
 
-        assertEquals(1L, original.id());
+        assertEquals(veiculoId, original.id());
         assertEquals("BRA1D23", original.placa().valor());
         assertEquals("Toyota", original.marca().valor());
         assertEquals("Corolla", original.modelo().valor());

@@ -14,8 +14,9 @@ import java.util.Set;
 @Provider
 @Priority(Priorities.AUTHORIZATION)
 public class IdempotencyKeyFilter implements ContainerRequestFilter {
-    public static final String HEADER_NAME = "Idempotency-Key";
-    private static final Set<String> MUTATING_METHODS = Set.of(HttpMethod.POST, HttpMethod.PUT, "PATCH");
+    public static final String HEADER_NAME = "X-Idempotency-Key";
+    private static final String LEGACY_HEADER_NAME = "Idempotency-Key";
+    private static final Set<String> MUTATING_METHODS = Set.of(HttpMethod.POST, "PATCH");
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
@@ -25,7 +26,10 @@ public class IdempotencyKeyFilter implements ContainerRequestFilter {
 
         String key = requestContext.getHeaderString(HEADER_NAME);
         if (key == null || key.isBlank()) {
-            throw new WebApplicationException("Header Idempotency-Key obrigatorio para operacoes mutaveis.", Response.Status.BAD_REQUEST);
+            key = requestContext.getHeaderString(LEGACY_HEADER_NAME);
+        }
+        if (key == null || key.isBlank()) {
+            throw new WebApplicationException("Header X-Idempotency-Key obrigatorio para operacoes mutaveis.", Response.Status.BAD_REQUEST);
         }
     }
 }

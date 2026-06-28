@@ -10,14 +10,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class OrdemDeServicoFactoryTest {
+    private static final UUID CLIENTE_ID = UUID.fromString("d290f1ee-6c54-4b01-90e6-d701748f0851");
+    private static final UUID VEICULO_ID = UUID.fromString("7b1f1a8d-7f4a-4f25-8e74-27d50210a61e");
 
     @Test
     void deveCriarNovaOrdemComEstadoRecebida() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
 
         assertNotNull(ordem.id());
-        assertEquals(1L, ordem.clienteId());
-        assertEquals(2L, ordem.veiculoId());
+        assertEquals(CLIENTE_ID, ordem.clienteId());
+        assertEquals(VEICULO_ID, ordem.veiculoId());
         assertEquals(TipoDeEstadoDaOrdemDeServico.RECEBIDA, ordem.estadoDaOrdemDeServico());
         assertNotNull(ordem.dataDoEstado());
     }
@@ -27,7 +29,7 @@ class OrdemDeServicoFactoryTest {
         var id = UUID.randomUUID();
         var estado = new EstadoDaOrdemDeServico(TipoDeEstadoDaOrdemDeServico.FINALIZADA, Instant.now());
 
-        var ordem = OrdemDeServicoFactory.reconstituiSimples(id, 9L, 8L, estado);
+        var ordem = OrdemDeServicoFactory.reconstituiSimples(id, CLIENTE_ID, VEICULO_ID, estado);
 
         assertEquals(id, ordem.id());
         assertEquals(TipoDeEstadoDaOrdemDeServico.FINALIZADA, ordem.estadoDaOrdemDeServico());
@@ -40,8 +42,8 @@ class OrdemDeServicoFactoryTest {
 
         var ordem = OrdemDeServicoFactory.reconstituiCompleto(
                 id,
-                3L,
-                4L,
+                CLIENTE_ID,
+                VEICULO_ID,
                 estado,
                 List.of(estado),
                 List.of(),

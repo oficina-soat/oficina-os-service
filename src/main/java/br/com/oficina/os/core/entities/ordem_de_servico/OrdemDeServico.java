@@ -11,8 +11,8 @@ import java.util.UUID;
 
 public class OrdemDeServico {
     private final UUID id;
-    private final Long clienteId;
-    private final Long veiculoId;
+    private final UUID clienteId;
+    private final UUID veiculoId;
 
     private EstadoDaOrdemDeServico estadoAtual;
     private final List<EstadoDaOrdemDeServico> historicoDeEstados = new ArrayList<>();
@@ -22,8 +22,8 @@ public class OrdemDeServico {
 
     OrdemDeServico(
             UUID id,
-            Long clienteId,
-            Long veiculoId,
+            UUID clienteId,
+            UUID veiculoId,
             EstadoDaOrdemDeServico estadoAtual) {
         this.id = id;
         this.clienteId = clienteId;
@@ -33,8 +33,8 @@ public class OrdemDeServico {
 
     OrdemDeServico(
             UUID id,
-            Long clienteId,
-            Long veiculoId,
+            UUID clienteId,
+            UUID veiculoId,
             EstadoDaOrdemDeServico estadoAtual,
             List<EstadoDaOrdemDeServico> historicoDeEstados,
             List<ItemPeca> pecas,
@@ -129,11 +129,11 @@ public class OrdemDeServico {
         return id;
     }
 
-    public long clienteId() {
+    public UUID clienteId() {
         return clienteId;
     }
 
-    public long veiculoId() {
+    public UUID veiculoId() {
         return veiculoId;
     }
 

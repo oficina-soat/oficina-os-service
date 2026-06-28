@@ -5,15 +5,18 @@ import br.com.oficina.os.core.exceptions.ItemDaOrdemDeServicoInvalidoException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class OrdemDeServicoTest {
+    private static final UUID CLIENTE_ID = UUID.fromString("d290f1ee-6c54-4b01-90e6-d701748f0851");
+    private static final UUID VEICULO_ID = UUID.fromString("7b1f1a8d-7f4a-4f25-8e74-27d50210a61e");
 
     @Test
     void deveExecutarFluxoCompletoDeEstados() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
 
         ordem.iniciarDiagnostico();
         ordem.adicionaPeca(1L, "Filtro", new BigDecimal("1"), new BigDecimal("99.99"));
@@ -31,7 +34,7 @@ class OrdemDeServicoTest {
 
     @Test
     void deveFalharEmTransicaoInvalida() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
 
         assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::finalizarDiagnostico);
         assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::iniciarExecucao);
@@ -39,7 +42,7 @@ class OrdemDeServicoTest {
 
     @Test
     void deveValidarQuantidadeEValorAoAdicionarItens() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
         ordem.iniciarDiagnostico();
 
         assertThrows(ItemDaOrdemDeServicoInvalidoException.class,
@@ -50,7 +53,7 @@ class OrdemDeServicoTest {
 
     @Test
     void deveFalharEmTodasAsTransicoesInvalidas() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
         assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::entregar);
         ordem.iniciarDiagnostico();
         assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::entregar);
@@ -60,7 +63,7 @@ class OrdemDeServicoTest {
 
     @Test
     void listasDevemSerImutaveisParaConsumoExterno() {
-        var ordem = OrdemDeServicoFactory.criarNovo(1L, 2L);
+        var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
         ordem.iniciarDiagnostico();
         ordem.adicionaPeca(1L, "Filtro", BigDecimal.ONE, BigDecimal.ONE);
 

@@ -1,14 +1,16 @@
 package br.com.oficina.os.core.entities.cliente;
 
+import java.util.UUID;
+
 public final class Cliente {
-    private final long id;
+    private final UUID id;
     private long pessoaId;
     private Documento documento;
     private String nome;
     private Email email;
 
     public Cliente(
-            long id,
+            UUID id,
             long pessoaId,
             Documento documento,
             String nome,
@@ -20,7 +22,7 @@ public final class Cliente {
         this.email = email;
     }
 
-    public Cliente(long id, Documento documento, Email email) {
+    public Cliente(UUID id, Documento documento, Email email) {
         this(id, 0, documento, null, email);
     }
 
@@ -40,7 +42,7 @@ public final class Cliente {
         this.email = email;
     }
 
-    public long id() {
+    public UUID id() {
         return id;
     }
 
