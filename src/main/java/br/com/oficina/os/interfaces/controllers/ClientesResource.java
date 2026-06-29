@@ -14,6 +14,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -32,6 +34,7 @@ public class ClientesResource {
     AtendimentoPresenter presenter;
 
     @POST
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response criarCliente(ClienteCreateRequest request) {
         var cliente = presenter.cliente(store.criarCliente(
                 request.nome(),
@@ -74,6 +77,7 @@ public class ClientesResource {
 
     @POST
     @Path("{clienteId}/veiculos")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response criarVeiculo(
             @PathParam("clienteId") UUID clienteId,
             VeiculosResource.VeiculoCreateRequest request) {

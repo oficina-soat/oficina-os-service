@@ -15,6 +15,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -33,6 +35,7 @@ public class OrdensServicoResource {
     AtendimentoPresenter presenter;
 
     @POST
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response abrirOrdemServico(OrdemServicoCreateRequest request) {
         var ordem = presenter.ordemServico(store.criarOrdemServico(
                 request.clienteId(),
@@ -71,6 +74,7 @@ public class OrdensServicoResource {
 
     @PATCH
     @Path("{ordemServicoId}/estado")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public OrdemServicoResponse alterarEstadoOrdemServico(
             @PathParam("ordemServicoId") UUID ordemServicoId,
             AlterarEstadoRequest request) {
@@ -82,6 +86,7 @@ public class OrdensServicoResource {
 
     @POST
     @Path("{ordemServicoId}/cancelamento")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response cancelarOrdemServico(
             @PathParam("ordemServicoId") UUID ordemServicoId,
             CancelamentoRequest request) {
