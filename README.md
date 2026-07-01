@@ -30,6 +30,26 @@ O serviço não é dono de catálogo técnico, estoque, orçamento ou pagamento.
 ./mvnw package -Ppostgresql
 ```
 
+## Testes e BDD
+
+O cenário BDD do fluxo feliz da Saga está em [src/test/resources/features/saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature), com steps em [src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java](src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java). Ele valida a travessia da OS por eventos consumidos de `oficina-execution-service` e `oficina-billing-service`, encerrando a Saga com `sagaFinalizadaComSucesso`.
+
+O runner Cucumber participa do ciclo Maven padrão. Assim, o comando usado pelo [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md) executa o BDD junto com os demais testes:
+
+```bash
+./mvnw -B verify -P"${MAVEN_PROFILE}" -DskipITs=false -DfailIfNoTests=false
+```
+
+Evidência local de execução compatível com CI em 2026-07-01:
+
+```text
+./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
+1 scenarios (1 passed)
+8 steps (8 passed)
+Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
 ## Docker
 
 ```bash
@@ -78,4 +98,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado é implementar histórico de estados, Outbox, publicação dos eventos de OS e consumo dos eventos de Billing e Execution, mantendo alinhamento com o [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md) e o [Padrão Outbox por Serviço](../oficina-platform/docs/outbox-pattern.md).
+O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado é configurar cobertura mínima de 80% com JaCoCo e evidência no README/CI, mantendo alinhamento com o [Padrão BDD, Cobertura e Qualidade](../oficina-platform/docs/bdd-testing.md).

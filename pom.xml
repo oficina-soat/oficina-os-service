@@ -7,6 +7,7 @@
 
     <properties>
         <compiler-plugin.version>3.14.1</compiler-plugin.version>
+        <cucumber.version>7.34.4</cucumber.version>
         <failsafe-plugin.version>3.5.4</failsafe-plugin.version>
         <jacoco-plugin.version>0.8.13</jacoco-plugin.version>
         <maven.compiler.release>25</maven.compiler.release>
@@ -99,6 +100,23 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jacoco</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-junit-platform-engine</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
