@@ -50,6 +50,16 @@ Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
+## Cobertura
+
+O JaCoCo é executado no `verify`, gera relatório em `target/jacoco-report/` e falha o build quando a cobertura de instruções do bundle fica abaixo de 80%. O [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md) publica esse diretório como artifact `jacoco-report-oficina-os-service`.
+
+Evidência local de cobertura em 2026-07-01:
+
+```text
+instruction=92.24% branch=69.73% line=90.94% complexity=72.01%
+```
+
 ## Docker
 
 ```bash
@@ -98,4 +108,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado é configurar cobertura mínima de 80% com JaCoCo e evidência no README/CI, mantendo alinhamento com o [Padrão BDD, Cobertura e Qualidade](../oficina-platform/docs/bdd-testing.md).
+O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado no Épico B2 é validar contratos OpenAPI, schemas JSON de eventos, erro padronizado, idempotência e Saga.
