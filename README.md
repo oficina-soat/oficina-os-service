@@ -80,7 +80,7 @@ A publicação de imagem e o deploy Kubernetes são condicionais:
 - `ENABLE_K8S_DEPLOY=true` habilita atualização do Deployment no EKS;
 - em `workflow_dispatch`, os inputs `publish_image` e `deploy` permitem acionar esses estágios manualmente.
 
-Enquanto a estratégia de manifestos Kubernetes por microsserviço estiver aberta na plataforma, mantenha `ENABLE_K8S_DEPLOY=false` e use o job de validação como checagem obrigatória de branch.
+Enquanto os manifests executáveis não estiverem materializados no `oficina-infra`, mantenha `ENABLE_K8S_DEPLOY=false` e use o job de validação como checagem obrigatória de branch.
 
 ## Validação de contratos
 
@@ -92,6 +92,14 @@ O teste [PlatformContractsTest](src/test/java/br/com/oficina/os/contracts/Platfo
 docker build --build-arg MAVEN_PROFILE=postgresql -t oficina-os-service:local .
 docker run --rm -p 8080:8080 oficina-os-service:local
 ```
+
+## Kubernetes
+
+A estratégia de entrega dos manifests está definida em [Estratégia de entrega dos manifestos Kubernetes](../oficina-platform/docs/kubernetes-manifest-strategy.md).
+
+Este repositório mantém o Dockerfile do serviço e não mantém cópia executável dos manifests Kubernetes para evitar divergência. A referência normativa do serviço fica em [Template Kubernetes do oficina-os-service](../oficina-platform/templates/kubernetes/base/oficina-os-service/), e o destino canônico de deploy é `../oficina-infra/k8s/base/microservices/oficina-os-service/`.
+
+O deploy automatizado só deve ser habilitado com `ENABLE_K8S_DEPLOY=true` depois que o Deployment `oficina-os-service` estiver materializado no `oficina-infra` e renderizado pelo overlay `../oficina-infra/k8s/overlays/lab/`.
 
 ## Endpoint técnico
 
@@ -146,4 +154,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main` e resolver a estratégia de entrega dos manifestos Kubernetes por microsserviço.
+O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main` e manter a documentação local atualizada conforme novos manifests, variáveis e evidências forem materializados.
