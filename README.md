@@ -60,6 +60,10 @@ Evidência local de cobertura em 2026-07-01:
 instruction=92.24% branch=69.73% line=90.94% complexity=72.01%
 ```
 
+## Validação de contratos
+
+O teste [PlatformContractsTest](src/test/java/br/com/oficina/os/contracts/PlatformContractsTest.java) valida o serviço contra os contratos canônicos em `../oficina-platform/contracts`: OpenAPI, schemas JSON de eventos, [Contrato de Erros REST](../oficina-platform/contracts/error-model.md), [Contrato de Idempotência](../oficina-platform/contracts/idempotency.md) e [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
+
 ## Docker
 
 ```bash
@@ -108,4 +112,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado no Épico B2 é validar contratos OpenAPI, schemas JSON de eventos, erro padronizado, idempotência e Saga.
+O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado no Épico B2 é copiar e adaptar workflows de CI/CD, garantindo build, testes, Quality Gate, publicação de imagem e deploy automatizado.
