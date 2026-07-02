@@ -60,6 +60,20 @@ Evidência local de cobertura em 2026-07-01:
 instruction=92.24% branch=69.73% line=90.94% complexity=72.01%
 ```
 
+## CI/CD
+
+Os workflows ficam em [.github/workflows/service-ci.yml](.github/workflows/service-ci.yml) e [.github/workflows/open-pr-to-main.yml](.github/workflows/open-pr-to-main.yml), derivados do [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md).
+
+Pull requests e pushes na `main` executam `./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false`, validam a cobertura mínima de 80%, executam o Quality Gate SonarCloud e publicam o artifact `jacoco-report-oficina-os-service`.
+
+A publicação de imagem e o deploy Kubernetes são condicionais:
+
+- `ENABLE_IMAGE_PUBLISH=true` habilita consulta ao ECR, build/push da imagem Docker e release com metadados da imagem;
+- `ENABLE_K8S_DEPLOY=true` habilita atualização do Deployment no EKS;
+- em `workflow_dispatch`, os inputs `publish_image` e `deploy` permitem acionar esses estágios manualmente.
+
+Enquanto a estratégia de manifestos Kubernetes por microsserviço estiver aberta na plataforma, mantenha `ENABLE_K8S_DEPLOY=false` e use o job de validação como checagem obrigatória de branch.
+
 ## Validação de contratos
 
 O teste [PlatformContractsTest](src/test/java/br/com/oficina/os/contracts/PlatformContractsTest.java) valida o serviço contra os contratos canônicos em `../oficina-platform/contracts`: OpenAPI, schemas JSON de eventos, [Contrato de Erros REST](../oficina-platform/contracts/error-model.md), [Contrato de Idempotência](../oficina-platform/contracts/idempotency.md) e [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
@@ -112,4 +126,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). O próximo incremento esperado no Épico B2 é copiar e adaptar workflows de CI/CD, garantindo build, testes, Quality Gate, publicação de imagem e deploy automatizado.
+O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main`, registrar Swagger/OpenAPI no README e documentar a justificativa da Saga orquestrada pelo `oficina-os-service`.
