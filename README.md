@@ -15,6 +15,14 @@ Este repositório segue a governança definida em [../oficina-platform](../ofici
 
 O serviço não é dono de catálogo técnico, estoque, orçamento ou pagamento.
 
+## Saga orquestrada
+
+A plataforma usa **Saga orquestrada** pelo `oficina-os-service`, conforme a [ADR-009 - Estratégia de Saga Pattern](../oficina-platform/adr/ADR-009%20-%20Estratégia%20de%20Saga%20Pattern.md), os [Fluxos da Saga da Ordem de Serviço](../oficina-platform/docs/saga-flows.md) e o [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
+
+O `oficina-os-service` é o orquestrador porque mantém o ciclo de vida global da Ordem de Serviço, registra histórico de estados e centraliza a decisão de avançar, aguardar, compensar ou bloquear o fluxo distribuído. Essa escolha deixa a sequência de negócio explícita, facilita observabilidade e evita que regras de compensação fiquem dispersas entre `oficina-billing-service` e `oficina-execution-service`.
+
+Os serviços participantes preservam seus próprios bancos e regras de domínio. Este serviço coordena comandos idempotentes e consome eventos de Billing e Execution para atualizar a Saga, publicar `sagaFinalizadaComSucesso` ou executar compensações que resultem em `sagaCompensada`.
+
 ## Stack
 
 - Java 25
@@ -138,4 +146,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main` e documentar a justificativa da Saga orquestrada pelo `oficina-os-service`.
+O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main` e resolver a estratégia de entrega dos manifestos Kubernetes por microsserviço.
