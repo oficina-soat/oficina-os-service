@@ -67,7 +67,7 @@ O comando `verify` executa testes unitários, integração, contrato, BDD e veri
 
 ## Testes e BDD
 
-O cenário BDD do fluxo feliz da Saga está em [src/test/resources/features/saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature), com steps em [src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java](src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java). Ele valida a travessia da OS por eventos consumidos de `oficina-execution-service` e `oficina-billing-service`, encerrando a Saga com `sagaFinalizadaComSucesso`.
+Os cenários BDD da Saga estão em [src/test/resources/features/saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature), com steps em [src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java](src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java). Eles validam o fluxo feliz da OS por eventos consumidos de `oficina-execution-service` e `oficina-billing-service`, encerrando a Saga com `sagaFinalizadaComSucesso`, e um fluxo de falha operacional antes da finalização, encerrando a Saga com `sagaCompensada`.
 
 O runner Cucumber participa do ciclo Maven padrão. Assim, o comando usado pelo [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md) executa o BDD junto com os demais testes:
 
@@ -75,13 +75,14 @@ O runner Cucumber participa do ciclo Maven padrão. Assim, o comando usado pelo 
 ./mvnw -B verify -P"${MAVEN_PROFILE}" -DskipITs=false -DfailIfNoTests=false
 ```
 
-Evidência local de execução compatível com CI em 2026-07-01:
+Evidência local de execução compatível com CI em 2026-07-03:
 
 ```text
 ./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
-1 scenarios (1 passed)
-8 steps (8 passed)
-Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
+2 scenarios (2 passed)
+15 steps (15 passed)
+Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
+All coverage checks have been met.
 BUILD SUCCESS
 ```
 

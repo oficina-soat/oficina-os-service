@@ -64,11 +64,24 @@ public class SagaOrdemServicoSteps {
 
     @Quando("a execução técnica é finalizada")
     public void aExecucaoTecnicaEFinalizada() {
-        consumir("execucaoIniciada", "oficina-execution-service", Map.of("execucaoId", execucaoId.toString()));
+        aExecucaoTecnicaEIniciadaPeloServicoDeExecucao();
         consumir("execucaoFinalizada", "oficina-execution-service", Map.of("execucaoId", execucaoId.toString()));
 
         assertEquals(EstadoSaga.AGUARDANDO_PAGAMENTO, store.buscarSaga(ordem.ordemServicoId()).estado());
         assertOutboxContem("ordemDeServicoFinalizada", "oficina.os.ordem-de-servico-finalizada");
+    }
+
+    @Quando("a execução técnica é iniciada pelo serviço de execução")
+    public void aExecucaoTecnicaEIniciadaPeloServicoDeExecucao() {
+        consumir("execucaoIniciada", "oficina-execution-service", Map.of("execucaoId", execucaoId.toString()));
+
+        assertEquals(EstadoSaga.EM_EXECUCAO, store.buscarSaga(ordem.ordemServicoId()).estado());
+        assertEquals(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, store.buscarOrdemServico(ordem.ordemServicoId()).estado());
+    }
+
+    @Quando("uma falha operacional impede a continuidade antes da finalização")
+    public void umaFalhaOperacionalImpedeAContinuidadeAntesDaFinalizacao() {
+        store.cancelar(ordem.ordemServicoId(), "Falha definitiva de estoque antes da execucao finalizar");
     }
 
     @Quando("o pagamento é solicitado e confirmado")
@@ -106,6 +119,20 @@ public class SagaOrdemServicoSteps {
     public void osEventosFinaisDeOsESagaDevemSerPublicados() {
         assertOutboxContem("ordemDeServicoEntregue", "oficina.os.ordem-de-servico-entregue");
         assertOutboxContem("sagaFinalizadaComSucesso", "oficina.saga.saga-finalizada-com-sucesso");
+    }
+
+    @Entao("a saga da ordem de serviço deve ser compensada")
+    public void aSagaDaOrdemDeServicoDeveSerCompensada() {
+        var saga = store.buscarSaga(ordem.ordemServicoId());
+
+        assertNotNull(saga);
+        assertEquals(EstadoSaga.COMPENSADA, saga.estado());
+        assertEquals(execucaoId, saga.execucaoId());
+    }
+
+    @Entao("o evento de compensação da Saga deve ser publicado")
+    public void oEventoDeCompensacaoDaSagaDeveSerPublicado() {
+        assertOutboxContem("sagaCompensada", "oficina.saga.saga-compensada");
     }
 
     private void consumir(String eventType, String producer, Map<String, Object> payload) {
