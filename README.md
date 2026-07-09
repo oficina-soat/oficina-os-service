@@ -105,12 +105,12 @@ Pull requests e pushes na `main` executam o check `service-ci-validate` com `./m
 A publicação de imagem e o deploy Kubernetes são condicionais:
 
 - `ENABLE_IMAGE_PUBLISH=true` habilita consulta ao ECR, build/push da imagem Docker e release com metadados da imagem;
-- `ENABLE_K8S_DEPLOY=true` habilita atualização do Deployment no EKS;
+- `ENABLE_K8S_DEPLOY=true` habilita publicação quando necessário, materialização ou atualização do Deployment no EKS e validação do rollout;
 - em `workflow_dispatch`, os inputs `publish_image` e `deploy` permitem acionar esses estágios manualmente.
 
 O workflow não usa GitHub Environment para evitar aprovação manual nos jobs. As variáveis e secrets de AWS/ECR/EKS devem estar em nível de repositório ou organização, e o controle manual do fluxo acontece no merge do PR aberto automaticamente a partir da branch `develop`.
 
-Enquanto os manifests executáveis não estiverem materializados no `oficina-infra`, mantenha `ENABLE_K8S_DEPLOY=false` e use o job de validação como checagem obrigatória de branch. Se `ENABLE_K8S_DEPLOY=true` for ligado antes de existir o Deployment `oficina-os-service` no cluster, o workflow reporta a pré-condição ausente e pula o rollout em vez de executar `kubectl set image` contra um recurso inexistente.
+Quando `ENABLE_K8S_DEPLOY=true`, o workflow do serviço faz checkout do `oficina-infra`, aplica o manifest canônico em `../oficina-infra/k8s/base/microservices/oficina-os-service/` com a imagem publicada pelo próprio workflow, aguarda o rollout no EKS e confere se o container ficou com a imagem esperada. Após recriar a infraestrutura base do lab, não é necessário executar um segundo `Deploy Lab` apenas para materializar este serviço.
 
 ## Validação de contratos
 
@@ -129,7 +129,7 @@ A estratégia de entrega dos manifests está definida em [Estratégia de entrega
 
 Este repositório mantém o Dockerfile do serviço e não mantém cópia executável dos manifests Kubernetes para evitar divergência. A referência normativa do serviço fica em [Template Kubernetes do oficina-os-service](../oficina-platform/templates/kubernetes/base/oficina-os-service/), e o destino canônico de deploy é `../oficina-infra/k8s/base/microservices/oficina-os-service/`.
 
-O deploy automatizado só deve ser habilitado com `ENABLE_K8S_DEPLOY=true` depois que o Deployment `oficina-os-service` estiver materializado no `oficina-infra` e renderizado pelo overlay `../oficina-infra/k8s/overlays/lab/`.
+O deploy automatizado com `ENABLE_K8S_DEPLOY=true` materializa o Deployment quando ele ainda não existe, atualiza a imagem quando ele já existe e valida o rollout no EKS usando o script canônico `scripts/manual/apply-microservices.sh` do `oficina-infra`.
 
 ## Endpoint técnico
 
