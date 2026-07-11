@@ -1,4 +1,4 @@
-package br.com.oficina.os.framework.messaging;
+package br.com.oficina.os.core.interfaces.messaging;
 
 import java.time.OffsetDateTime;
 import java.util.Map;

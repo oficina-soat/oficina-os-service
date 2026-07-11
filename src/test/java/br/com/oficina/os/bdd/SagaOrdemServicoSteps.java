@@ -6,8 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
 import br.com.oficina.os.framework.db.AtendimentoSeedStore;
-import br.com.oficina.os.framework.messaging.DomainEventEnvelope;
+import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import io.cucumber.java.pt.Dado;
 import io.cucumber.java.pt.Entao;
 import io.cucumber.java.pt.Quando;
@@ -19,7 +20,7 @@ import java.util.UUID;
 
 public class SagaOrdemServicoSteps {
     private final AtendimentoSeedStore store = new AtendimentoSeedStore();
-    private AtendimentoSeedStore.OrdemServicoRecord ordem;
+    private OrdemServicoRecord ordem;
     private UUID execucaoId;
     private UUID orcamentoId;
     private UUID pagamentoId;

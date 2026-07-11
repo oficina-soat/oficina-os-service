@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
-import br.com.oficina.os.framework.messaging.DomainEventEnvelope;
+import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.restassured.http.ContentType;

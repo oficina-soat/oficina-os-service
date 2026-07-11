@@ -1,19 +1,21 @@
 package br.com.oficina.os.framework.messaging;
 
-import br.com.oficina.os.framework.db.AtendimentoSeedStore;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
+import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
+import br.com.oficina.os.core.usecases.saga.ConsumirEventoDaSagaUseCase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class DomainEventConsumer {
-    private final AtendimentoSeedStore store;
+    private final ConsumirEventoDaSagaUseCase consumirEventoDaSaga;
 
     @Inject
-    public DomainEventConsumer(AtendimentoSeedStore store) {
-        this.store = store;
+    public DomainEventConsumer(ConsumirEventoDaSagaUseCase consumirEventoDaSaga) {
+        this.consumirEventoDaSaga = consumirEventoDaSaga;
     }
 
-    public AtendimentoSeedStore.SagaRecord consumir(DomainEventEnvelope event) {
-        return store.consumirEvento(event);
+    public SagaRecord consumir(DomainEventEnvelope event) {
+        return consumirEventoDaSaga.executar(event).join();
     }
 }

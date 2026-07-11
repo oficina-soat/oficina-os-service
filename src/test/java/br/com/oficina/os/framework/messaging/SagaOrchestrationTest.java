@@ -2,6 +2,8 @@ package br.com.oficina.os.framework.messaging;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
+import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.framework.db.AtendimentoSeedStore;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -131,7 +133,7 @@ class SagaOrchestrationTest {
         assertOutboxContem(ordem.ordemServicoId(), "sagaCompensada", "oficina.saga.saga-compensada");
     }
 
-    private AtendimentoSeedStore.OrdemServicoRecord novaOrdemServico(String descricao) {
+    private OrdemServicoRecord novaOrdemServico(String descricao) {
         return store.criarOrdemServico(
                 AtendimentoSeedStore.SEED_CLIENTE_ID,
                 AtendimentoSeedStore.SEED_VEICULO_ID,

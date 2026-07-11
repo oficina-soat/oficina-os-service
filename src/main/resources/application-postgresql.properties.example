@@ -1,4 +1,5 @@
 quarkus.datasource.db-kind=postgresql
+oficina.persistence.kind=postgresql
 quarkus.datasource.username=${DB_USERNAME}
 quarkus.datasource.password=${DB_PASSWORD}
 quarkus.datasource.jdbc.url=${JDBC_DATABASE_URL}
