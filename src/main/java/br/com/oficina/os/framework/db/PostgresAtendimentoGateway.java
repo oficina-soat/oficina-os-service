@@ -1,5 +1,8 @@
 package br.com.oficina.os.framework.db;
 
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.correlationId;
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.logEvent;
+
 import br.com.oficina.os.core.entities.cliente.DocumentoFactory;
 import br.com.oficina.os.core.entities.cliente.Email;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
@@ -17,7 +20,6 @@ import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
-import br.com.oficina.os.framework.observability.StructuredLog;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,7 +29,6 @@ import jakarta.ws.rs.core.Response;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.OffsetDateTime;
@@ -39,7 +40,6 @@ import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
 
 class PostgresAtendimentoGateway implements AtendimentoGateway {
     private static final Logger LOG = Logger.getLogger(PostgresAtendimentoGateway.class);
@@ -615,7 +615,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                     statement.executeBatch();
                 }
                 connection.commit();
-                publicados.forEach(event -> logEvent("outbox event published", event, "PUBLISHED"));
+                publicados.forEach(event -> logEvent(LOG, "outbox event published", event, "PUBLISHED"));
                 return List.copyOf(publicados);
             } catch (SQLException | RuntimeException exception) {
                 rollback(connection);
@@ -636,7 +636,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
                 if (inboxContem(connection, event.eventId())) {
                     var saga = buscarSagaPostgres(connection, ordemServicoId);
-                    logEvent("domain event ignored", event, "DUPLICATE", ordemServicoId, correlationId(saga, event));
+                    logEvent(LOG, "domain event ignored", event, "DUPLICATE", ordemServicoId, correlationId(saga, event));
                     connection.commit();
                     return saga;
                 }
@@ -703,7 +703,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                     default -> saga;
                 };
                 connection.commit();
-                logEvent("domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
+                logEvent(LOG, "domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
                 return resultado;
             } catch (SQLException | RuntimeException exception) {
                 rollback(connection);
@@ -1053,7 +1053,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             statement.setString(14, event.lastError());
             statement.executeUpdate();
         }
-        logEvent("outbox event registered", event, "PENDING");
+        logEvent(LOG, "outbox event registered", event, "PENDING");
     }
 
     private void inserirOrdemServico(Connection connection, OrdemServicoRecord ordem) throws SQLException {
@@ -1370,53 +1370,6 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         } catch (SQLException ignored) {
             // The original persistence failure is more useful to callers.
         }
-    }
-
-    private void logEvent(String message, OutboxEventRecord event, String messageStatus) {
-        StructuredLog.info(LOG, message, Map.of(
-                "correlationId", event.correlationId(),
-                "eventId", event.eventId().toString(),
-                "eventType", event.eventType(),
-                "eventVersion", event.eventVersion(),
-                "topic", event.topic(),
-                "producer", event.producer(),
-                "aggregateId", event.aggregateId().toString(),
-                "messageStatus", messageStatus));
-    }
-
-    private void logEvent(
-            String message,
-            DomainEventEnvelope event,
-            String messageStatus,
-            UUID aggregateId,
-            String correlationId) {
-        StructuredLog.info(LOG, message, Map.of(
-                "correlationId", correlationId(correlationId),
-                "eventId", event.eventId().toString(),
-                "eventType", event.eventType(),
-                "eventVersion", event.eventVersion(),
-                "producer", event.producer(),
-                "consumer", PRODUCER,
-                "aggregateId", aggregateId.toString(),
-                "messageStatus", messageStatus));
-    }
-
-    private String correlationId(SagaRecord saga, DomainEventEnvelope event) {
-        if (saga != null && saga.correlationId() != null && !saga.correlationId().isBlank()) {
-            return saga.correlationId();
-        }
-        return event.eventId().toString();
-    }
-
-    private String correlationId(String correlationId) {
-        if (correlationId != null && !correlationId.isBlank()) {
-            return correlationId.trim();
-        }
-        var mdcCorrelationId = MDC.get("correlationId");
-        if (mdcCorrelationId != null && !mdcCorrelationId.toString().isBlank()) {
-            return mdcCorrelationId.toString();
-        }
-        return "local-" + UUID.randomUUID();
     }
 
     private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
