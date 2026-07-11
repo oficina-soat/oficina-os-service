@@ -14,12 +14,12 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.NotFoundException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
-import jakarta.ws.rs.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -141,9 +141,12 @@ class PostgresAtendimentoSeedStoreTest {
         store.cancelar(ordemCancelada.ordemServicoId(), "Cliente cancelou");
         assertEquals(EstadoSaga.COMPENSADA, store.buscarSaga(ordemCancelada.ordemServicoId()).estado());
 
-        assertThrows(NotFoundException.class, () -> store.buscarCliente(UUID.fromString("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")));
-        assertThrows(NotFoundException.class, () -> store.buscarVeiculo(UUID.fromString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")));
-        assertThrows(NotFoundException.class, () -> store.buscarOrdemServico(UUID.fromString("cccccccc-cccc-4ccc-cccc-cccccccccccc")));
+        var clienteInexistente = UUID.fromString("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa");
+        var veiculoInexistente = UUID.fromString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb");
+        var ordemInexistente = UUID.fromString("cccccccc-cccc-4ccc-cccc-cccccccccccc");
+        assertThrows(NotFoundException.class, () -> store.buscarCliente(clienteInexistente));
+        assertThrows(NotFoundException.class, () -> store.buscarVeiculo(veiculoInexistente));
+        assertThrows(NotFoundException.class, () -> store.buscarOrdemServico(ordemInexistente));
     }
 
     private static DomainEventEnvelope evento(String eventType, UUID ordemServicoId, Map<String, Object> payload) {

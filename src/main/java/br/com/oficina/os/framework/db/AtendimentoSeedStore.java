@@ -2,13 +2,6 @@ package br.com.oficina.os.framework.db;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.HistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OperacaoAssincronaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaHistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -11,13 +11,6 @@ import br.com.oficina.os.core.entities.veiculo.MarcaDeVeiculo;
 import br.com.oficina.os.core.entities.veiculo.ModeloDeVeiculo;
 import br.com.oficina.os.core.entities.veiculo.PlacaDeVeiculo;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.HistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OperacaoAssincronaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaHistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -55,6 +48,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private static final String PAYLOAD_ORCAMENTO_ID = "orcamentoId";
     private static final String PAYLOAD_PAGAMENTO_ID = "pagamentoId";
     private static final String PAYLOAD_MOTIVO = "motivo";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String COLUMN_CLIENTE_ID = "cliente_id";
+    private static final String COLUMN_CRIADO_EM = "criado_em";
+    private static final String COLUMN_ATUALIZADO_EM = "atualizado_em";
 
     private final DataSource dataSource;
 
@@ -163,45 +161,33 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         var clienteId = UUID.randomUUID();
         var pessoaId = UUID.randomUUID();
         var documentoNormalizado = documento.trim();
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                try (var statement = connection.prepareStatement("""
-                        INSERT INTO pessoa (id, documento, tipo_pessoa, nome, criado_em, atualizado_em)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """)) {
-                    statement.setObject(1, pessoaId);
-                    statement.setString(2, documentoNormalizado);
-                    statement.setString(3, documentoNormalizado.length() == 14 ? "JURIDICA" : "FISICA");
-                    statement.setString(4, nome.trim());
-                    statement.setObject(5, agora);
-                    statement.setObject(6, agora);
-                    statement.executeUpdate();
-                }
-                try (var statement = connection.prepareStatement("""
-                        INSERT INTO cliente (id, pessoa_id, email, telefone, criado_em, atualizado_em)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """)) {
-                    statement.setObject(1, clienteId);
-                    statement.setObject(2, pessoaId);
-                    statement.setString(3, normalizar(email));
-                    statement.setString(4, normalizar(telefone));
-                    statement.setObject(5, agora);
-                    statement.setObject(6, agora);
-                    statement.executeUpdate();
-                }
-                connection.commit();
-                return new ClienteRecord(clienteId, nome.trim(), documentoNormalizado, normalizar(telefone), normalizar(email), agora, agora);
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
+        return inTransaction(connection -> {
+            try (var statement = connection.prepareStatement("""
+                    INSERT INTO pessoa (id, documento, tipo_pessoa, nome, criado_em, atualizado_em)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """)) {
+                statement.setObject(1, pessoaId);
+                statement.setString(2, documentoNormalizado);
+                statement.setString(3, documentoNormalizado.length() == 14 ? "JURIDICA" : "FISICA");
+                statement.setString(4, nome.trim());
+                statement.setObject(5, agora);
+                statement.setObject(6, agora);
+                statement.executeUpdate();
             }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+            try (var statement = connection.prepareStatement("""
+                    INSERT INTO cliente (id, pessoa_id, email, telefone, criado_em, atualizado_em)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """)) {
+                statement.setObject(1, clienteId);
+                statement.setObject(2, pessoaId);
+                statement.setString(3, normalizar(email));
+                statement.setString(4, normalizar(telefone));
+                statement.setObject(5, agora);
+                statement.setObject(6, agora);
+                statement.executeUpdate();
+            }
+            return new ClienteRecord(clienteId, nome.trim(), documentoNormalizado, normalizar(telefone), normalizar(email), agora, agora);
+        });
     }
 
     private List<ClienteRecord> listarClientesPostgres() {
@@ -234,46 +220,34 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private ClienteRecord atualizarClientePostgres(UUID clienteId, String nome, String documento, String telefone, String email) {
         validarCliente(nome, documento, email);
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                var pessoaId = pessoaIdDoCliente(connection, clienteId);
-                try (var statement = connection.prepareStatement("""
-                        UPDATE pessoa
-                        SET nome = ?, documento = ?, tipo_pessoa = ?, atualizado_em = ?
-                        WHERE id = ?
-                        """)) {
-                    var documentoNormalizado = documento.trim();
-                    statement.setString(1, nome.trim());
-                    statement.setString(2, documentoNormalizado);
-                    statement.setString(3, documentoNormalizado.length() == 14 ? "JURIDICA" : "FISICA");
-                    statement.setObject(4, agora);
-                    statement.setObject(5, pessoaId);
-                    statement.executeUpdate();
-                }
-                try (var statement = connection.prepareStatement("""
-                        UPDATE cliente
-                        SET email = ?, telefone = ?, atualizado_em = ?
-                        WHERE id = ?
-                        """)) {
-                    statement.setString(1, normalizar(email));
-                    statement.setString(2, normalizar(telefone));
-                    statement.setObject(3, agora);
-                    statement.setObject(4, clienteId);
-                    statement.executeUpdate();
-                }
-                connection.commit();
-                return buscarClientePostgres(clienteId);
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
+        return inTransaction(connection -> {
+            var pessoaId = pessoaIdDoCliente(connection, clienteId);
+            try (var statement = connection.prepareStatement("""
+                    UPDATE pessoa
+                    SET nome = ?, documento = ?, tipo_pessoa = ?, atualizado_em = ?
+                    WHERE id = ?
+                    """)) {
+                var documentoNormalizado = documento.trim();
+                statement.setString(1, nome.trim());
+                statement.setString(2, documentoNormalizado);
+                statement.setString(3, documentoNormalizado.length() == 14 ? "JURIDICA" : "FISICA");
+                statement.setObject(4, agora);
+                statement.setObject(5, pessoaId);
+                statement.executeUpdate();
             }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+            try (var statement = connection.prepareStatement("""
+                    UPDATE cliente
+                    SET email = ?, telefone = ?, atualizado_em = ?
+                    WHERE id = ?
+                    """)) {
+                statement.setString(1, normalizar(email));
+                statement.setString(2, normalizar(telefone));
+                statement.setObject(3, agora);
+                statement.setObject(4, clienteId);
+                statement.executeUpdate();
+            }
+            return buscarClientePostgres(connection, clienteId);
+        });
     }
 
     private VeiculoRecord criarVeiculoPostgres(UUID clienteId, String placa, String marca, String modelo, int ano) {
@@ -375,44 +349,32 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 agora,
                 agora);
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                buscarClientePostgres(connection, clienteId);
-                var veiculo = buscarVeiculoPostgres(connection, veiculoId);
-                if (!veiculo.clienteId().equals(clienteId)) {
-                    throw new WebApplicationException("Veiculo nao pertence ao cliente informado.", Response.Status.CONFLICT);
-                }
-                inserirOrdemServico(connection, ordem);
-                inserirHistorico(connection, ordem.ordemServicoId(), ordem.estado(), agora, "Ordem de servico recebida");
-                var correlationId = correlationId(null);
-                criarSagaInicialPostgres(connection, ordem.ordemServicoId(), agora, correlationId);
-                enfileirarEventoPostgres(
-                        connection,
-                        EVENT_ORDEM_DE_SERVICO_CRIADA,
-                        "oficina.os.ordem-de-servico-criada",
-                        ordem.ordemServicoId(),
-                        Map.of(
-                                PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
-                                "clienteId", clienteId.toString(),
-                                "veiculoId", veiculoId.toString(),
-                                PAYLOAD_ESTADO_ATUAL, ordem.estado().name(),
-                                "criadoEm", agora.toString(),
-                                "descricaoProblema", ordem.descricaoProblema()),
-                        correlationId,
-                        agora);
-                connection.commit();
-                return ordem;
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
+        return inTransaction(connection -> {
+            buscarClientePostgres(connection, clienteId);
+            var veiculo = buscarVeiculoPostgres(connection, veiculoId);
+            if (!veiculo.clienteId().equals(clienteId)) {
+                throw new WebApplicationException("Veiculo nao pertence ao cliente informado.", Response.Status.CONFLICT);
             }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+            inserirOrdemServico(connection, ordem);
+            inserirHistorico(connection, ordem.ordemServicoId(), ordem.estado(), agora, "Ordem de servico recebida");
+            var correlationId = correlationId(null);
+            criarSagaInicialPostgres(connection, ordem.ordemServicoId(), agora, correlationId);
+            enfileirarEventoPostgres(
+                    connection,
+                    EVENT_ORDEM_DE_SERVICO_CRIADA,
+                    "oficina.os.ordem-de-servico-criada",
+                    ordem.ordemServicoId(),
+                    Map.of(
+                            PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
+                            "clienteId", clienteId.toString(),
+                            "veiculoId", veiculoId.toString(),
+                            PAYLOAD_ESTADO_ATUAL, ordem.estado().name(),
+                            "criadoEm", agora.toString(),
+                            "descricaoProblema", ordem.descricaoProblema()),
+                    correlationId,
+                    agora);
+            return ordem;
+        });
     }
 
     private List<OrdemServicoRecord> listarOrdensServicoPostgres(TipoDeEstadoDaOrdemDeServico estado) {
@@ -462,7 +424,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                     result.add(new HistoricoRecord(
                             TipoDeEstadoDaOrdemDeServico.valueOf(resultSet.getString("tipo_estado")),
                             offsetDateTime(resultSet, "data_estado"),
-                            resultSet.getString("motivo")));
+                            resultSet.getString(PAYLOAD_MOTIVO)));
                 }
                 return List.copyOf(result);
             }
@@ -472,42 +434,15 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     private OrdemServicoRecord alterarEstadoPostgres(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                var result = alterarEstadoPostgres(connection, ordemServicoId, novoEstado, motivo, true);
-                connection.commit();
-                return result;
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+        return inTransaction(connection -> alterarEstadoPostgres(connection, ordemServicoId, novoEstado, motivo, true));
     }
 
     private OperacaoAssincronaRecord cancelarPostgres(UUID ordemServicoId, String motivo) {
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                buscarOrdemServicoPostgres(connection, ordemServicoId);
-                compensarSagaPostgres(connection, ordemServicoId, normalizar(motivo));
-                connection.commit();
-                return new OperacaoAssincronaRecord("ACEITO", OffsetDateTime.now(ZoneOffset.UTC));
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+        return inTransaction(connection -> {
+            buscarOrdemServicoPostgres(connection, ordemServicoId);
+            compensarSagaPostgres(connection, ordemServicoId, normalizar(motivo));
+            return new OperacaoAssincronaRecord("ACEITO", OffsetDateTime.now(ZoneOffset.UTC));
+        });
     }
 
     private SagaRecord buscarSagaPostgres(UUID ordemServicoId) {
@@ -566,154 +501,132 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
 
     private List<OutboxEventRecord> publicarEventosPendentesPostgres() {
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                var pendentes = new ArrayList<OutboxEventRecord>();
-                try (var statement = connection.prepareStatement("""
-                        SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                               correlation_id, occurred_at, created_at, published_at, attempts, last_error
-                        FROM outbox_event
-                        WHERE status = 'PENDING'
-                        ORDER BY created_at
-                        FOR UPDATE
-                        """);
-                        var resultSet = statement.executeQuery()) {
-                    while (resultSet.next()) {
-                        pendentes.add(toOutboxEvent(resultSet));
-                    }
+        var publicados = inTransaction(connection -> {
+            var pendentes = new ArrayList<OutboxEventRecord>();
+            try (var statement = connection.prepareStatement("""
+                    SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                           correlation_id, occurred_at, created_at, published_at, attempts, last_error
+                    FROM outbox_event
+                    WHERE status = 'PENDING'
+                    ORDER BY created_at
+                    FOR UPDATE
+                    """);
+                    var resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    pendentes.add(toOutboxEvent(resultSet));
                 }
-                var publicados = new ArrayList<OutboxEventRecord>();
-                try (var statement = connection.prepareStatement("""
-                        UPDATE outbox_event
-                        SET status = 'PUBLISHED', published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
-                        WHERE id = ?
-                        """)) {
-                    for (var event : pendentes) {
-                        var publicado = new OutboxEventRecord(
-                                event.eventId(),
-                                event.aggregateId(),
-                                event.eventType(),
-                                event.eventVersion(),
-                                event.topic(),
-                                event.producer(),
-                                event.payload(),
-                                "PUBLISHED",
-                                event.correlationId(),
-                                event.occurredAt(),
-                                event.createdAt(),
-                                agora,
-                                event.attempts() + 1,
-                                null);
-                        statement.setObject(1, agora);
-                        statement.setInt(2, publicado.attempts());
-                        statement.setObject(3, publicado.eventId());
-                        statement.addBatch();
-                        publicados.add(publicado);
-                    }
-                    statement.executeBatch();
-                }
-                connection.commit();
-                publicados.forEach(event -> logEvent(LOG, "outbox event published", event, "PUBLISHED"));
-                return List.copyOf(publicados);
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
             }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
-        }
+            var events = new ArrayList<OutboxEventRecord>();
+            try (var statement = connection.prepareStatement("""
+                    UPDATE outbox_event
+                    SET status = 'PUBLISHED', published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
+                    WHERE id = ?
+                    """)) {
+                statement.setObject(1, agora);
+                for (var event : pendentes) {
+                    var publicado = new OutboxEventRecord(
+                            event.eventId(),
+                            event.aggregateId(),
+                            event.eventType(),
+                            event.eventVersion(),
+                            event.topic(),
+                            event.producer(),
+                            event.payload(),
+                            STATUS_PUBLISHED,
+                            event.correlationId(),
+                            event.occurredAt(),
+                            event.createdAt(),
+                            agora,
+                            event.attempts() + 1,
+                            null);
+                    statement.setInt(2, publicado.attempts());
+                    statement.setObject(3, publicado.eventId());
+                    statement.addBatch();
+                    events.add(publicado);
+                }
+                statement.executeBatch();
+            }
+            return List.copyOf(events);
+        });
+        publicados.forEach(event -> logEvent(LOG, "outbox event published", event, STATUS_PUBLISHED));
+        return publicados;
     }
 
     private SagaRecord consumirEventoPostgres(DomainEventEnvelope event) {
-        try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
-                if (inboxContem(connection, event.eventId())) {
-                    var saga = buscarSagaPostgres(connection, ordemServicoId);
-                    logEvent(LOG, "domain event ignored", event, "DUPLICATE", ordemServicoId, correlationId(saga, event));
-                    connection.commit();
-                    return saga;
-                }
-                var saga = buscarSagaPostgres(connection, ordemServicoId);
-                if (saga == null) {
-                    throw new NotFoundException("Saga da ordem de servico nao encontrada: " + ordemServicoId);
-                }
-                inserirInbox(connection, event, ordemServicoId);
-                var resultado = switch (event.eventType()) {
-                    case "diagnosticoIniciado" -> processarDiagnosticoIniciadoPostgres(connection, saga, event);
-                    case "diagnosticoFinalizado" -> processarDiagnosticoFinalizadoPostgres(connection, saga, event);
-                    case "orcamentoGerado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
-                            EstadoSaga.AGUARDANDO_APROVACAO,
-                            buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
-                            "orcamentoGerado",
-                            null,
-                            new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
-                            event.occurredAt(),
-                            correlationId(saga, event)));
-                    case "orcamentoAprovado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
-                            EstadoSaga.EM_EXECUCAO,
-                            buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
-                            "orcamentoAprovado",
-                            null,
-                            new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
-                            event.occurredAt(),
-                            correlationId(saga, event)));
-                    case "orcamentoRecusado" -> processarOrcamentoRecusadoPostgres(connection, saga, event);
-                    case "execucaoIniciada" -> processarExecucaoIniciadaPostgres(connection, saga, event);
-                    case "execucaoFinalizada" -> processarExecucaoFinalizadaPostgres(connection, saga, event);
-                    case "pagamentoSolicitado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
-                            EstadoSaga.AGUARDANDO_PAGAMENTO,
-                            buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
-                            "pagamentoSolicitado",
-                            null,
-                            new SagaExternalIds(
-                                    saga.execucaoId(),
-                                    uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
-                                    uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
-                            event.occurredAt(),
-                            correlationId(saga, event)));
-                    case "pagamentoConfirmado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
-                            EstadoSaga.AGUARDANDO_ENTREGA,
-                            buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
-                            "pagamentoConfirmado",
-                            null,
-                            new SagaExternalIds(
-                                    saga.execucaoId(),
-                                    saga.orcamentoId(),
-                                    uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
-                            event.occurredAt(),
-                            correlationId(saga, event)));
-                    case "pagamentoRecusado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
-                            EstadoSaga.AGUARDANDO_PAGAMENTO,
-                            buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
-                            "pagamentoRecusado",
-                            stringFromPayload(event.payload(), PAYLOAD_MOTIVO),
-                            new SagaExternalIds(
-                                    saga.execucaoId(),
-                                    saga.orcamentoId(),
-                                    uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
-                            event.occurredAt(),
-                            correlationId(saga, event)));
-                    default -> saga;
-                };
-                connection.commit();
-                logEvent(LOG, "domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
-                return resultado;
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
-        } catch (SQLException exception) {
-            throw persistenceFailure(exception);
+        var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
+        return inTransaction(connection -> consumirEventoPostgres(connection, event, ordemServicoId));
+    }
+
+    private SagaRecord consumirEventoPostgres(Connection connection, DomainEventEnvelope event, UUID ordemServicoId) throws SQLException {
+        if (inboxContem(connection, event.eventId())) {
+            var saga = buscarSagaPostgres(connection, ordemServicoId);
+            logEvent(LOG, "domain event ignored", event, "DUPLICATE", ordemServicoId, correlationId(saga, event));
+            return saga;
         }
+        var saga = buscarSagaPostgres(connection, ordemServicoId);
+        if (saga == null) {
+            throw new NotFoundException("Saga da ordem de servico nao encontrada: " + ordemServicoId);
+        }
+        inserirInbox(connection, event, ordemServicoId);
+        var resultado = switch (event.eventType()) {
+            case "diagnosticoIniciado" -> processarDiagnosticoIniciadoPostgres(connection, saga, event);
+            case "diagnosticoFinalizado" -> processarDiagnosticoFinalizadoPostgres(connection, saga, event);
+            case "orcamentoGerado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
+                    EstadoSaga.AGUARDANDO_APROVACAO,
+                    buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
+                    "orcamentoGerado",
+                    null,
+                    new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
+                    event.occurredAt(),
+                    correlationId(saga, event)));
+            case "orcamentoAprovado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
+                    EstadoSaga.EM_EXECUCAO,
+                    buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
+                    "orcamentoAprovado",
+                    null,
+                    new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
+                    event.occurredAt(),
+                    correlationId(saga, event)));
+            case "orcamentoRecusado" -> processarOrcamentoRecusadoPostgres(connection, saga, event);
+            case "execucaoIniciada" -> processarExecucaoIniciadaPostgres(connection, saga, event);
+            case "execucaoFinalizada" -> processarExecucaoFinalizadaPostgres(connection, saga, event);
+            case "pagamentoSolicitado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
+                    EstadoSaga.AGUARDANDO_PAGAMENTO,
+                    buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
+                    "pagamentoSolicitado",
+                    null,
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    correlationId(saga, event)));
+            case "pagamentoConfirmado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
+                    EstadoSaga.AGUARDANDO_ENTREGA,
+                    buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
+                    "pagamentoConfirmado",
+                    null,
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            saga.orcamentoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    correlationId(saga, event)));
+            case "pagamentoRecusado" -> transicionarSagaPostgres(connection, saga, new SagaTransition(
+                    EstadoSaga.AGUARDANDO_PAGAMENTO,
+                    buscarOrdemServicoPostgres(connection, ordemServicoId).estado(),
+                    "pagamentoRecusado",
+                    stringFromPayload(event.payload(), PAYLOAD_MOTIVO),
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            saga.orcamentoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    correlationId(saga, event)));
+            default -> saga;
+        };
+        logEvent(LOG, "domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
+        return resultado;
     }
 
     private OrdemServicoRecord alterarEstadoPostgres(
@@ -1024,7 +937,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 topic,
                 PRODUCER,
                 payload,
-                "PENDING",
+                STATUS_PENDING,
                 effectiveCorrelationId,
                 occurredAt,
                 OffsetDateTime.now(ZoneOffset.UTC),
@@ -1053,7 +966,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             statement.setString(14, event.lastError());
             statement.executeUpdate();
         }
-        logEvent(LOG, "outbox event registered", event, "PENDING");
+        logEvent(LOG, "outbox event registered", event, STATUS_PENDING);
     }
 
     private void inserirOrdemServico(Connection connection, OrdemServicoRecord ordem) throws SQLException {
@@ -1229,36 +1142,36 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
 
     private ClienteRecord toCliente(ResultSet resultSet) throws SQLException {
         return new ClienteRecord(
-                uuid(resultSet, "cliente_id"),
+                uuid(resultSet, COLUMN_CLIENTE_ID),
                 resultSet.getString("nome"),
                 resultSet.getString("documento"),
                 resultSet.getString("telefone"),
                 resultSet.getString("email"),
-                offsetDateTime(resultSet, "criado_em"),
-                offsetDateTime(resultSet, "atualizado_em"));
+                offsetDateTime(resultSet, COLUMN_CRIADO_EM),
+                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM));
     }
 
     private VeiculoRecord toVeiculo(ResultSet resultSet) throws SQLException {
         return new VeiculoRecord(
                 uuid(resultSet, "id"),
-                uuid(resultSet, "cliente_id"),
+                uuid(resultSet, COLUMN_CLIENTE_ID),
                 resultSet.getString("placa"),
                 resultSet.getString("marca"),
                 resultSet.getString("modelo"),
                 resultSet.getInt("ano"),
-                offsetDateTime(resultSet, "criado_em"),
-                offsetDateTime(resultSet, "atualizado_em"));
+                offsetDateTime(resultSet, COLUMN_CRIADO_EM),
+                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM));
     }
 
     private OrdemServicoRecord toOrdemServico(ResultSet resultSet) throws SQLException {
         return new OrdemServicoRecord(
                 uuid(resultSet, "id"),
-                uuid(resultSet, "cliente_id"),
+                uuid(resultSet, COLUMN_CLIENTE_ID),
                 uuid(resultSet, "veiculo_id"),
                 resultSet.getString("descricao_problema"),
                 TipoDeEstadoDaOrdemDeServico.valueOf(resultSet.getString("estado_atual")),
-                offsetDateTime(resultSet, "criado_em"),
-                offsetDateTime(resultSet, "atualizado_em"));
+                offsetDateTime(resultSet, COLUMN_CRIADO_EM),
+                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM));
     }
 
     private SagaRecord toSaga(ResultSet resultSet) throws SQLException {
@@ -1272,8 +1185,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 uuid(resultSet, "orcamento_id"),
                 uuid(resultSet, "pagamento_id"),
                 resultSet.getString("correlation_id"),
-                offsetDateTime(resultSet, "criado_em"),
-                offsetDateTime(resultSet, "atualizado_em"),
+                offsetDateTime(resultSet, COLUMN_CRIADO_EM),
+                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM),
                 resultSet.getString("ultimo_erro"));
     }
 
@@ -1285,7 +1198,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 EstadoSaga.valueOf(resultSet.getString("estado_atual")),
                 TipoDeEstadoDaOrdemDeServico.valueOf(resultSet.getString("estado_os")),
                 resultSet.getString("etapa"),
-                resultSet.getString("motivo"),
+                resultSet.getString(PAYLOAD_MOTIVO),
                 offsetDateTime(resultSet, "ocorrido_em"));
     }
 
@@ -1364,10 +1277,33 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         return new IllegalStateException("Falha ao acessar PostgreSQL do oficina-os-service.", exception);
     }
 
+    private <T> T inTransaction(SqlOperation<T> operation) {
+        try (var connection = dataSource.getConnection()) {
+            return executeInTransaction(connection, operation);
+        } catch (SQLException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    private <T> T executeInTransaction(Connection connection, SqlOperation<T> operation) throws SQLException {
+        var previousAutoCommit = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        try {
+            var result = operation.execute(connection);
+            connection.commit();
+            return result;
+        } catch (SQLException | RuntimeException exception) {
+            rollback(connection);
+            throw exception;
+        } finally {
+            connection.setAutoCommit(previousAutoCommit);
+        }
+    }
+
     private void rollback(Connection connection) {
         try {
             connection.rollback();
-        } catch (SQLException ignored) {
+        } catch (SQLException _) {
             // The original persistence failure is more useful to callers.
         }
     }
@@ -1440,5 +1376,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             SagaExternalIds ids,
             OffsetDateTime ocorridoEm,
             String correlationId) {
+    }
+
+    @FunctionalInterface
+    private interface SqlOperation<T> {
+        T execute(Connection connection) throws SQLException;
     }
 }
