@@ -19,11 +19,14 @@ import java.util.UUID;
 @PermitAll
 @Path("/api/v1")
 public class VeiculosResource {
-    @Inject
-    AtendimentoSeedStore store;
+    private final AtendimentoSeedStore store;
+    private final AtendimentoPresenter presenter;
 
     @Inject
-    AtendimentoPresenter presenter;
+    public VeiculosResource(AtendimentoSeedStore store, AtendimentoPresenter presenter) {
+        this.store = store;
+        this.presenter = presenter;
+    }
 
     @GET
     @Path("veiculos/{veiculoId}")

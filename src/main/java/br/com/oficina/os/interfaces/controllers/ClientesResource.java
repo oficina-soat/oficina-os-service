@@ -27,11 +27,14 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @PermitAll
 public class ClientesResource {
-    @Inject
-    AtendimentoSeedStore store;
+    private final AtendimentoSeedStore store;
+    private final AtendimentoPresenter presenter;
 
     @Inject
-    AtendimentoPresenter presenter;
+    public ClientesResource(AtendimentoSeedStore store, AtendimentoPresenter presenter) {
+        this.store = store;
+        this.presenter = presenter;
+    }
 
     @POST
     @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
