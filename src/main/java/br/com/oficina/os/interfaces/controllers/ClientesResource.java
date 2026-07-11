@@ -1,6 +1,11 @@
 package br.com.oficina.os.interfaces.controllers;
 
-import br.com.oficina.os.framework.db.AtendimentoSeedStore;
+import br.com.oficina.os.core.usecases.cliente.AtualizarClienteUseCase;
+import br.com.oficina.os.core.usecases.cliente.BuscarClienteUseCase;
+import br.com.oficina.os.core.usecases.cliente.CriarClienteUseCase;
+import br.com.oficina.os.core.usecases.cliente.ListarClientesUseCase;
+import br.com.oficina.os.core.usecases.veiculo.CriarVeiculoUseCase;
+import br.com.oficina.os.core.usecases.veiculo.ListarVeiculosDoClienteUseCase;
 import br.com.oficina.os.interfaces.presenters.AtendimentoPresenter;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
@@ -27,19 +32,36 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @PermitAll
 public class ClientesResource {
-    private final AtendimentoSeedStore store;
+    private final CriarClienteUseCase criarCliente;
+    private final ListarClientesUseCase listarClientes;
+    private final BuscarClienteUseCase buscarCliente;
+    private final AtualizarClienteUseCase atualizarCliente;
+    private final CriarVeiculoUseCase criarVeiculo;
+    private final ListarVeiculosDoClienteUseCase listarVeiculosDoCliente;
     private final AtendimentoPresenter presenter;
 
     @Inject
-    public ClientesResource(AtendimentoSeedStore store, AtendimentoPresenter presenter) {
-        this.store = store;
+    public ClientesResource(
+            CriarClienteUseCase criarCliente,
+            ListarClientesUseCase listarClientes,
+            BuscarClienteUseCase buscarCliente,
+            AtualizarClienteUseCase atualizarCliente,
+            CriarVeiculoUseCase criarVeiculo,
+            ListarVeiculosDoClienteUseCase listarVeiculosDoCliente,
+            AtendimentoPresenter presenter) {
+        this.criarCliente = criarCliente;
+        this.listarClientes = listarClientes;
+        this.buscarCliente = buscarCliente;
+        this.atualizarCliente = atualizarCliente;
+        this.criarVeiculo = criarVeiculo;
+        this.listarVeiculosDoCliente = listarVeiculosDoCliente;
         this.presenter = presenter;
     }
 
     @POST
     @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response criarCliente(ClienteCreateRequest request) {
-        var cliente = presenter.cliente(store.criarCliente(
+        var cliente = presenter.cliente(criarCliente.executar(
                 request.nome(),
                 request.documento(),
                 request.telefone(),
@@ -53,7 +75,7 @@ public class ClientesResource {
     public PageResponse<ClienteResponse> consultarClientes(
             @QueryParam("page") Integer page,
             @QueryParam("size") Integer size) {
-        var clientes = store.listarClientes().stream()
+        var clientes = listarClientes.executar().stream()
                 .map(presenter::cliente)
                 .toList();
         return PageResponse.of(clientes, page == null ? 0 : page, size == null ? 20 : size);
@@ -62,7 +84,7 @@ public class ClientesResource {
     @GET
     @Path("{clienteId}")
     public ClienteResponse consultarCliente(@PathParam("clienteId") UUID clienteId) {
-        return presenter.cliente(store.buscarCliente(clienteId));
+        return presenter.cliente(buscarCliente.executar(clienteId));
     }
 
     @PUT
@@ -70,7 +92,7 @@ public class ClientesResource {
     public ClienteResponse atualizarCliente(
             @PathParam("clienteId") UUID clienteId,
             ClienteUpdateRequest request) {
-        return presenter.cliente(store.atualizarCliente(
+        return presenter.cliente(atualizarCliente.executar(
                 clienteId,
                 request.nome(),
                 request.documento(),
@@ -84,7 +106,7 @@ public class ClientesResource {
     public Response criarVeiculo(
             @PathParam("clienteId") UUID clienteId,
             VeiculosResource.VeiculoCreateRequest request) {
-        var veiculo = presenter.veiculo(store.criarVeiculo(
+        var veiculo = presenter.veiculo(criarVeiculo.executar(
                 clienteId,
                 request.placa(),
                 request.marca(),
@@ -98,7 +120,7 @@ public class ClientesResource {
     @GET
     @Path("{clienteId}/veiculos")
     public List<VeiculosResource.VeiculoResponse> consultarVeiculosDoCliente(@PathParam("clienteId") UUID clienteId) {
-        return store.listarVeiculosDoCliente(clienteId).stream()
+        return listarVeiculosDoCliente.executar(clienteId).stream()
                 .map(presenter::veiculo)
                 .toList();
     }

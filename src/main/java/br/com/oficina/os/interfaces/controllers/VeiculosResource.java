@@ -1,6 +1,7 @@
 package br.com.oficina.os.interfaces.controllers;
 
-import br.com.oficina.os.framework.db.AtendimentoSeedStore;
+import br.com.oficina.os.core.usecases.veiculo.AtualizarVeiculoUseCase;
+import br.com.oficina.os.core.usecases.veiculo.BuscarVeiculoUseCase;
 import br.com.oficina.os.interfaces.presenters.AtendimentoPresenter;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
@@ -19,19 +20,24 @@ import java.util.UUID;
 @PermitAll
 @Path("/api/v1")
 public class VeiculosResource {
-    private final AtendimentoSeedStore store;
+    private final BuscarVeiculoUseCase buscarVeiculo;
+    private final AtualizarVeiculoUseCase atualizarVeiculo;
     private final AtendimentoPresenter presenter;
 
     @Inject
-    public VeiculosResource(AtendimentoSeedStore store, AtendimentoPresenter presenter) {
-        this.store = store;
+    public VeiculosResource(
+            BuscarVeiculoUseCase buscarVeiculo,
+            AtualizarVeiculoUseCase atualizarVeiculo,
+            AtendimentoPresenter presenter) {
+        this.buscarVeiculo = buscarVeiculo;
+        this.atualizarVeiculo = atualizarVeiculo;
         this.presenter = presenter;
     }
 
     @GET
     @Path("veiculos/{veiculoId}")
     public VeiculoResponse consultarVeiculo(@PathParam("veiculoId") UUID veiculoId) {
-        return presenter.veiculo(store.buscarVeiculo(veiculoId));
+        return presenter.veiculo(buscarVeiculo.executar(veiculoId));
     }
 
     @PUT
@@ -39,7 +45,7 @@ public class VeiculosResource {
     public VeiculoResponse atualizarVeiculo(
             @PathParam("veiculoId") UUID veiculoId,
             VeiculoUpdateRequest request) {
-        return presenter.veiculo(store.atualizarVeiculo(
+        return presenter.veiculo(atualizarVeiculo.executar(
                 veiculoId,
                 request.placa(),
                 request.marca(),

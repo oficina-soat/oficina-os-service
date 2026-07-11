@@ -1,0 +1,17 @@
+package br.com.oficina.os.core.usecases.veiculo;
+
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
+import java.util.UUID;
+
+public class BuscarVeiculoUseCase {
+    private final AtendimentoGateway gateway;
+
+    public BuscarVeiculoUseCase(AtendimentoGateway gateway) {
+        this.gateway = gateway;
+    }
+
+    public VeiculoRecord executar(UUID veiculoId) {
+        return gateway.buscarVeiculo(veiculoId);
+    }
+}

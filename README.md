@@ -31,6 +31,12 @@ Os serviços participantes preservam seus próprios bancos e regras de domínio.
 - Flyway para migrations
 - JWT, OpenAPI, Health, métricas Prometheus, logs JSON e OpenTelemetry
 
+## Arquitetura
+
+O serviço segue Clean Architecture com `core/entities`, portas em `core/interfaces`, casos de uso em `core/usecases`, entrada REST em `interfaces/controllers` e adapters em `framework/`. O `core/` não deve importar CDI, JAX-RS, Quarkus, JDBC ou classes de `framework/` e `interfaces/`.
+
+Os casos de uso são classes Java puras instanciadas por [AtendimentoConfiguration](src/main/java/br/com/oficina/os/framework/web/AtendimentoConfiguration.java). Resources e presenters chamam casos de uso e tipos do core; persistência e mensageria ficam atrás da porta [AtendimentoGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/AtendimentoGateway.java). A regra é validada por [CleanArchitectureBoundaryTest](src/test/java/br/com/oficina/os/architecture/CleanArchitectureBoundaryTest.java).
+
 ## Setup local
 
 Pré-requisitos:
@@ -89,7 +95,7 @@ Evidência local de execução compatível com CI em 2026-07-11:
 ./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
 2 scenarios (2 passed)
 15 steps (15 passed)
-Tests run: 91, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 95, Failures: 0, Errors: 0, Skipped: 0
 All coverage checks have been met.
 BUILD SUCCESS
 ```

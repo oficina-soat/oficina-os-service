@@ -1,6 +1,9 @@
 package br.com.oficina.os.interfaces.presenters;
 
-import br.com.oficina.os.framework.db.AtendimentoSeedStore;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteRecord;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.HistoricoRecord;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.interfaces.controllers.ClientesResource;
 import br.com.oficina.os.interfaces.controllers.OrdensServicoResource;
 import br.com.oficina.os.interfaces.controllers.VeiculosResource;
@@ -9,7 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class AtendimentoPresenter {
 
-    public ClientesResource.ClienteResponse cliente(AtendimentoSeedStore.ClienteRecord cliente) {
+    public ClientesResource.ClienteResponse cliente(ClienteRecord cliente) {
         return new ClientesResource.ClienteResponse(
                 cliente.clienteId(),
                 cliente.nome(),
@@ -20,7 +23,7 @@ public class AtendimentoPresenter {
                 cliente.atualizadoEm());
     }
 
-    public VeiculosResource.VeiculoResponse veiculo(AtendimentoSeedStore.VeiculoRecord veiculo) {
+    public VeiculosResource.VeiculoResponse veiculo(VeiculoRecord veiculo) {
         return new VeiculosResource.VeiculoResponse(
                 veiculo.veiculoId(),
                 veiculo.clienteId(),
@@ -32,7 +35,7 @@ public class AtendimentoPresenter {
                 veiculo.atualizadoEm());
     }
 
-    public OrdensServicoResource.OrdemServicoResponse ordemServico(AtendimentoSeedStore.OrdemServicoRecord ordem) {
+    public OrdensServicoResource.OrdemServicoResponse ordemServico(OrdemServicoRecord ordem) {
         return new OrdensServicoResource.OrdemServicoResponse(
                 ordem.ordemServicoId(),
                 ordem.clienteId(),
@@ -43,7 +46,7 @@ public class AtendimentoPresenter {
                 ordem.atualizadoEm());
     }
 
-    public OrdensServicoResource.HistoricoOrdemServicoResponse historico(AtendimentoSeedStore.HistoricoRecord historico) {
+    public OrdensServicoResource.HistoricoOrdemServicoResponse historico(HistoricoRecord historico) {
         return new OrdensServicoResource.HistoricoOrdemServicoResponse(
                 historico.estado(),
                 historico.dataDoEstado(),

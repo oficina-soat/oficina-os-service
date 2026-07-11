@@ -30,8 +30,8 @@ usuario: oficina_os_user
 
 ## Referências Normativas
 
-- [Matriz de Ownership por Microsserviço](../oficina-platform/docs/service-ownership.md)
-- [Plano de Decomposição do oficina-app](../oficina-platform/docs/oficina-app-decomposition.md)
+- [Matriz de Ownership por Microsserviço](../oficina-platform/docs/architecture/service-ownership.md)
+- [Plano de Decomposição do oficina-app](../oficina-platform/docs/architecture/oficina-app-decomposition.md)
 - [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md)
 - [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml)
 - [Contrato de Estados da Ordem de Serviço](../oficina-platform/contracts/Contrato%20de%20Estados%20da%20Ordem%20de%20Serviço.md)
@@ -39,12 +39,12 @@ usuario: oficina_os_user
 - [Contrato de Tópicos de Mensageria](../oficina-platform/contracts/Contrato%20de%20Tópicos%20de%20Mensageria.md)
 - [Contrato de Erros REST](../oficina-platform/contracts/error-model.md)
 - [Contrato de Idempotência](../oficina-platform/contracts/idempotency.md)
-- [Padrão Outbox por Serviço](../oficina-platform/docs/outbox-pattern.md)
+- [Padrão Outbox por Serviço](../oficina-platform/docs/architecture/outbox-pattern.md)
 - [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md)
-- [Fluxos da Saga da Ordem de Serviço](../oficina-platform/docs/saga-flows.md)
-- [Padrão de Observabilidade Distribuída](../oficina-platform/docs/observability.md)
-- [Proposta de Migrations PostgreSQL Decompostas](../oficina-platform/docs/postgres-migrations-decomposition.md)
-- [Padrão de isolamento PostgreSQL no RDS compartilhado](../oficina-platform/docs/rds-postgresql-isolation.md)
+- [Fluxos da Saga da Ordem de Serviço](../oficina-platform/docs/architecture/saga-flows.md)
+- [Padrão de Observabilidade Distribuída](../oficina-platform/docs/observability/observability.md)
+- [Proposta de Migrations PostgreSQL Decompostas](../oficina-platform/docs/infrastructure/postgres-migrations-decomposition.md)
+- [Padrão de isolamento PostgreSQL no RDS compartilhado](../oficina-platform/docs/infrastructure/rds-postgresql-isolation.md)
 
 ## Regras de Implementação
 
@@ -66,6 +66,14 @@ src/main/java/br/com/oficina/os/
     web/
 ```
 
+- O `core/` deve ser livre de framework: não importe `framework/`, `interfaces/`, `jakarta`, `javax`, `io.quarkus` ou `org.jboss` em entidades, portas ou casos de uso.
+- Defina portas de saída em `core/interfaces/gateway` e contratos de mensageria usados pelo domínio em `core/interfaces/messaging`.
+- Defina casos de uso em `core/usecases/<dominio>/` como classes Java puras, sem CDI, JAX-RS, Quarkus, JDBC, JSON framework ou annotations de runtime.
+- Instancie casos de uso e adapters apenas na camada de framework, preferencialmente em `framework/web/AtendimentoConfiguration` ou configuração equivalente.
+- Controllers, presenters e recursos de entrada não devem importar adapters de `framework/db` diretamente; eles devem depender de casos de uso ou portas do core.
+- Adapters de persistência e mensageria pertencem ao `framework/` e devem implementar portas do core. O modo em memória é fixture explícita de teste/local e não deve conter regra arquitetural que pertença ao core.
+- `AtendimentoSeedStore` deve permanecer apenas como facade pequeno de seleção entre adapters. Não adicione regras de negócio, SQL ou manipulação de estruturas de memória diretamente nele.
+- Preserve o teste `CleanArchitectureBoundaryTest`; ao adicionar novo pacote ou camada, atualize o teste junto para impedir regressão de dependências.
 - Não crie biblioteca Java compartilhada entre microsserviços.
 - Não acesse o database `oficina_billing` nem tabelas DynamoDB do `oficina-execution-service`.
 - Não implemente catálogo técnico, estoque, orçamento ou pagamento neste serviço.
@@ -95,7 +103,9 @@ Antes de encerrar alterações relevantes, execute validação proporcional ao i
 ./mvnw test -Ppostgresql
 ```
 
-Quando as ferramentas estiverem disponíveis, use também as validações complementares documentadas em [Ferramentas de validação local](../oficina-platform/docs/validation-tooling.md):
+Mudanças que afetem dependências entre camadas devem passar também pelo teste `CleanArchitectureBoundaryTest`, executado no ciclo Maven padrão.
+
+Quando as ferramentas estiverem disponíveis, use também as validações complementares documentadas em [Ferramentas de validação local](../oficina-platform/docs/delivery/validation-tooling.md):
 
 - alterações em GitHub Actions: `actionlint`;
 - alterações em `Dockerfile`: `hadolint Dockerfile`;

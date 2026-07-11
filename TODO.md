@@ -13,6 +13,7 @@
 - [x] Implementar consumo dos eventos de Billing e Execution.
 - [x] Implementar orquestração da Saga conforme [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
 - [x] Substituir o store de processo por persistência PostgreSQL runtime para Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox, mantendo memória apenas como fixture de teste.
+- [x] Reorganizar a aplicação em portas e casos de uso de Clean Architecture, isolando `core/` de CDI/JAX-RS/framework e mantendo `AtendimentoSeedStore` apenas como facade de seleção de adapter.
 - [x] Criar testes unitários e de integração mínimos para APIs, persistência, eventos, idempotência e Saga.
 - [x] Criar cenários BDD automatizados do fluxo feliz e de falha compensada da Saga em [saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature).
 - [x] Configurar cobertura mínima de 80% com JaCoCo e evidência no README/CI, conforme [Padrão BDD, Cobertura e Qualidade](../oficina-platform/docs/delivery/bdd-testing.md).

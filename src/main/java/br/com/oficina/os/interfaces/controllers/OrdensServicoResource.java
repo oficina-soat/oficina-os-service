@@ -1,7 +1,12 @@
 package br.com.oficina.os.interfaces.controllers;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
-import br.com.oficina.os.framework.db.AtendimentoSeedStore;
+import br.com.oficina.os.core.usecases.ordem_de_servico.AbrirOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.AlterarEstadoOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.BuscarOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.CancelarOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.ConsultarHistoricoOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.ListarOrdensServicoUseCase;
 import br.com.oficina.os.interfaces.presenters.AtendimentoPresenter;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
@@ -28,19 +33,36 @@ import java.util.UUID;
 @Produces(MediaType.APPLICATION_JSON)
 @PermitAll
 public class OrdensServicoResource {
-    private final AtendimentoSeedStore store;
+    private final AbrirOrdemServicoUseCase abrirOrdemServico;
+    private final ListarOrdensServicoUseCase listarOrdensServico;
+    private final BuscarOrdemServicoUseCase buscarOrdemServico;
+    private final ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico;
+    private final AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico;
+    private final CancelarOrdemServicoUseCase cancelarOrdemServico;
     private final AtendimentoPresenter presenter;
 
     @Inject
-    public OrdensServicoResource(AtendimentoSeedStore store, AtendimentoPresenter presenter) {
-        this.store = store;
+    public OrdensServicoResource(
+            AbrirOrdemServicoUseCase abrirOrdemServico,
+            ListarOrdensServicoUseCase listarOrdensServico,
+            BuscarOrdemServicoUseCase buscarOrdemServico,
+            ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico,
+            AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico,
+            CancelarOrdemServicoUseCase cancelarOrdemServico,
+            AtendimentoPresenter presenter) {
+        this.abrirOrdemServico = abrirOrdemServico;
+        this.listarOrdensServico = listarOrdensServico;
+        this.buscarOrdemServico = buscarOrdemServico;
+        this.consultarHistoricoOrdemServico = consultarHistoricoOrdemServico;
+        this.alterarEstadoOrdemServico = alterarEstadoOrdemServico;
+        this.cancelarOrdemServico = cancelarOrdemServico;
         this.presenter = presenter;
     }
 
     @POST
     @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
     public Response abrirOrdemServico(OrdemServicoCreateRequest request) {
-        var ordem = presenter.ordemServico(store.criarOrdemServico(
+        var ordem = presenter.ordemServico(abrirOrdemServico.executar(
                 request.clienteId(),
                 request.veiculoId(),
                 request.descricaoProblema()));
@@ -54,7 +76,7 @@ public class OrdensServicoResource {
             @QueryParam("estado") TipoDeEstadoDaOrdemDeServico estado,
             @QueryParam("page") Integer page,
             @QueryParam("size") Integer size) {
-        var ordens = store.listarOrdensServico(estado).stream()
+        var ordens = listarOrdensServico.executar(estado).stream()
                 .map(presenter::ordemServico)
                 .toList();
         return PageResponse.of(ordens, page == null ? 0 : page, size == null ? 20 : size);
@@ -63,14 +85,14 @@ public class OrdensServicoResource {
     @GET
     @Path("{ordemServicoId}")
     public OrdemServicoResponse consultarOrdemServico(@PathParam("ordemServicoId") UUID ordemServicoId) {
-        return presenter.ordemServico(store.buscarOrdemServico(ordemServicoId));
+        return presenter.ordemServico(buscarOrdemServico.executar(ordemServicoId));
     }
 
     @GET
     @Path("{ordemServicoId}/historico")
     public List<HistoricoOrdemServicoResponse> consultarHistoricoOrdemServico(
             @PathParam("ordemServicoId") UUID ordemServicoId) {
-        return store.historico(ordemServicoId).stream()
+        return consultarHistoricoOrdemServico.executar(ordemServicoId).stream()
                 .map(presenter::historico)
                 .toList();
     }
@@ -81,7 +103,7 @@ public class OrdensServicoResource {
     public OrdemServicoResponse alterarEstadoOrdemServico(
             @PathParam("ordemServicoId") UUID ordemServicoId,
             AlterarEstadoRequest request) {
-        return presenter.ordemServico(store.alterarEstado(
+        return presenter.ordemServico(alterarEstadoOrdemServico.executar(
                 ordemServicoId,
                 request.estado(),
                 request.motivo()));
@@ -93,7 +115,7 @@ public class OrdensServicoResource {
     public Response cancelarOrdemServico(
             @PathParam("ordemServicoId") UUID ordemServicoId,
             CancelamentoRequest request) {
-        var operacao = store.cancelar(ordemServicoId, request == null ? null : request.motivo());
+        var operacao = cancelarOrdemServico.executar(ordemServicoId, request == null ? null : request.motivo());
         return Response.accepted(new OperacaoAssincronaResponse(operacao.status(), operacao.solicitadoEm())).build();
     }
 
