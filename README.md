@@ -17,7 +17,7 @@ O serviço não é dono de catálogo técnico, estoque, orçamento ou pagamento.
 
 ## Saga orquestrada
 
-A plataforma usa **Saga orquestrada** pelo `oficina-os-service`, conforme a [ADR-009 - Estratégia de Saga Pattern](../oficina-platform/adr/ADR-009%20-%20Estratégia%20de%20Saga%20Pattern.md), os [Fluxos da Saga da Ordem de Serviço](../oficina-platform/docs/saga-flows.md) e o [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
+A plataforma usa **Saga orquestrada** pelo `oficina-os-service`, conforme a [ADR-009 - Estratégia de Saga Pattern](../oficina-platform/adr/ADR-009%20-%20Estratégia%20de%20Saga%20Pattern.md), os [Fluxos da Saga da Ordem de Serviço](../oficina-platform/docs/architecture/saga-flows.md) e o [Contrato de Saga do oficina-os-service](../oficina-platform/contracts/saga/oficina-os-saga-v1.md).
 
 O `oficina-os-service` é o orquestrador porque mantém o ciclo de vida global da Ordem de Serviço, registra histórico de estados e centraliza a decisão de avançar, aguardar, compensar ou bloquear o fluxo distribuído. Essa escolha deixa a sequência de negócio explícita, facilita observabilidade e evita que regras de compensação fiquem dispersas entre `oficina-billing-service` e `oficina-execution-service`.
 
@@ -67,6 +67,12 @@ cd ../oficina-os-service
 
 O comando `verify` executa testes unitários, integração, contrato, BDD e verificação de cobertura JaCoCo.
 
+## Persistência
+
+Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=postgresql`) no database `oficina_os`, com migrations Flyway. Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox usam adapters JDBC e devem sobreviver a restart do processo ou pod quando conectados ao banco do ambiente.
+
+O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`) e fixtures explícitas. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers e aplica as migrations do serviço.
+
 ## Testes e BDD
 
 Os cenários BDD da Saga estão em [src/test/resources/features/saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature), com steps em [src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java](src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java). Eles validam o fluxo feliz da OS por eventos consumidos de `oficina-execution-service` e `oficina-billing-service`, encerrando a Saga com `sagaFinalizadaComSucesso`, e um fluxo de falha operacional antes da finalização, encerrando a Saga com `sagaCompensada`.
@@ -77,13 +83,13 @@ O runner Cucumber participa do ciclo Maven padrão. Assim, o comando usado pelo 
 ./mvnw -B verify -P"${MAVEN_PROFILE}" -DskipITs=false -DfailIfNoTests=false
 ```
 
-Evidência local de execução compatível com CI em 2026-07-03:
+Evidência local de execução compatível com CI em 2026-07-11:
 
 ```text
 ./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
 2 scenarios (2 passed)
 15 steps (15 passed)
-Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 91, Failures: 0, Errors: 0, Skipped: 0
 All coverage checks have been met.
 BUILD SUCCESS
 ```
@@ -168,6 +174,7 @@ O teste [PlatformContractsTest](src/test/java/br/com/oficina/os/contracts/Platfo
 - `DB_PASSWORD`
 - `JDBC_DATABASE_URL`
 - `REACTIVE_DATABASE_URL`
+- `OFICINA_PERSISTENCE_KIND` (`postgresql` em runtime; `memory` apenas em testes/fixtures explícitas)
 - `OFICINA_AUTH_ISSUER`
 - `OFICINA_AUTH_AUDIENCE`
 - `MP_JWT_VERIFY_PUBLICKEY_LOCATION`
@@ -189,4 +196,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). Os próximos incrementos esperados no Épico B2 são configurar a proteção da branch `main` e manter a documentação local atualizada conforme novos manifests, variáveis e evidências forem materializados.
+O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime do domínio, Saga, Inbox e Outbox foi implementada localmente; os próximos incrementos esperados no Épico B2 permanecem no roadmap da plataforma, principalmente mensageria SNS/SQS real, idempotência persistente e evidência remota no ambiente `lab`.
