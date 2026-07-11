@@ -9,27 +9,31 @@ import br.com.oficina.os.core.entities.veiculo.ModeloDeVeiculo;
 import br.com.oficina.os.core.entities.veiculo.PlacaDeVeiculo;
 import br.com.oficina.os.framework.messaging.DomainEventEnvelope;
 import br.com.oficina.os.framework.messaging.OutboxEventRecord;
+import br.com.oficina.os.framework.observability.StructuredLog;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 @ApplicationScoped
 public class AtendimentoSeedStore {
+    private static final Logger LOG = Logger.getLogger(AtendimentoSeedStore.class);
     public static final UUID SEED_CLIENTE_ID = UUID.fromString("d290f1ee-6c54-4b01-90e6-d701748f0851");
     public static final UUID SEED_VEICULO_ID = UUID.fromString("7b1f1a8d-7f4a-4f25-8e74-27d50210a61e");
     public static final UUID SEED_ORDEM_SERVICO_ID = UUID.fromString("f3d87547-3f5f-4f3a-9e37-b8df70c31696");
+    private static final String PRODUCER = "oficina-os-service";
     private static final String EVENT_ORDEM_DE_SERVICO_CRIADA = "ordemDeServicoCriada";
     private static final String EVENT_SAGA_COMPENSADA = "sagaCompensada";
     private static final String PAYLOAD_ORDEM_SERVICO_ID = "ordemServicoId";
@@ -183,7 +187,8 @@ public class AtendimentoSeedStore {
                 ordem.estado(),
                 agora,
                 "Ordem de servico recebida"))));
-        criarSagaInicial(ordem.ordemServicoId(), agora, null);
+        var correlationId = correlationId(null);
+        criarSagaInicial(ordem.ordemServicoId(), agora, correlationId);
         enfileirarEvento(
                 EVENT_ORDEM_DE_SERVICO_CRIADA,
                 "oficina.os.ordem-de-servico-criada",
@@ -195,7 +200,7 @@ public class AtendimentoSeedStore {
                         PAYLOAD_ESTADO_ATUAL, ordem.estado().name(),
                         "criadoEm", agora.toString(),
                         "descricaoProblema", ordem.descricaoProblema()),
-                null,
+                correlationId,
                 agora);
         return ordem;
     }
@@ -284,13 +289,16 @@ public class AtendimentoSeedStore {
                     null);
             outboxEvents.put(publicado.eventId(), publicado);
             publicados.add(publicado);
+            logEvent("outbox event published", publicado, "PUBLISHED");
         }
         return publicados;
     }
 
     public synchronized SagaRecord consumirEvento(DomainEventEnvelope event) {
         if (consumedEventIds.contains(event.eventId())) {
-            return sagasByOrdemServico.get(event.aggregateId());
+            var saga = sagasByOrdemServico.get(event.aggregateId());
+            logEvent("domain event ignored", event, "DUPLICATE", event.aggregateId(), correlationId(saga, event));
+            return saga;
         }
         var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
         var saga = buscarSaga(ordemServicoId);
@@ -299,7 +307,7 @@ public class AtendimentoSeedStore {
         }
         consumedEventIds.add(event.eventId());
 
-        return switch (event.eventType()) {
+        var resultado = switch (event.eventType()) {
             case "diagnosticoIniciado" -> processarDiagnosticoIniciado(saga, event);
             case "diagnosticoFinalizado" -> processarDiagnosticoFinalizado(saga, event);
             case "orcamentoGerado" -> transicionarSaga(saga, new SagaTransition(
@@ -309,7 +317,7 @@ public class AtendimentoSeedStore {
                     null,
                     new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
                     event.occurredAt(),
-                    event.eventId().toString()));
+                    correlationId(saga, event)));
             case "orcamentoAprovado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.EM_EXECUCAO,
                     buscarOrdemServico(ordemServicoId).estado(),
@@ -317,7 +325,7 @@ public class AtendimentoSeedStore {
                     null,
                     new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
                     event.occurredAt(),
-                    event.eventId().toString()));
+                    correlationId(saga, event)));
             case "orcamentoRecusado" -> processarOrcamentoRecusado(saga, event);
             case "execucaoIniciada" -> processarExecucaoIniciada(saga, event);
             case "execucaoFinalizada" -> processarExecucaoFinalizada(saga, event);
@@ -331,7 +339,7 @@ public class AtendimentoSeedStore {
                             uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
                             uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
                     event.occurredAt(),
-                    event.eventId().toString()));
+                    correlationId(saga, event)));
             case "pagamentoConfirmado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_ENTREGA,
                     buscarOrdemServico(ordemServicoId).estado(),
@@ -342,7 +350,7 @@ public class AtendimentoSeedStore {
                             saga.orcamentoId(),
                             uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
                     event.occurredAt(),
-                    event.eventId().toString()));
+                    correlationId(saga, event)));
             case "pagamentoRecusado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_PAGAMENTO,
                     buscarOrdemServico(ordemServicoId).estado(),
@@ -353,9 +361,11 @@ public class AtendimentoSeedStore {
                             saga.orcamentoId(),
                             uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
                     event.occurredAt(),
-                    event.eventId().toString()));
+                    correlationId(saga, event)));
             default -> saga;
         };
+        logEvent("domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
+        return resultado;
     }
 
     private void compensarSaga(UUID ordemServicoId, String motivo) {
@@ -408,7 +418,7 @@ public class AtendimentoSeedStore {
                         saga.orcamentoId(),
                         saga.pagamentoId()),
                 event.occurredAt(),
-                event.eventId().toString()));
+                correlationId(saga, event)));
     }
 
     private SagaRecord processarDiagnosticoFinalizado(SagaRecord saga, DomainEventEnvelope event) {
@@ -426,7 +436,7 @@ public class AtendimentoSeedStore {
                         saga.orcamentoId(),
                         saga.pagamentoId()),
                 event.occurredAt(),
-                event.eventId().toString()));
+                correlationId(saga, event)));
     }
 
     private SagaRecord processarOrcamentoRecusado(SagaRecord saga, DomainEventEnvelope event) {
@@ -444,7 +454,7 @@ public class AtendimentoSeedStore {
                         uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
                         saga.pagamentoId()),
                 event.occurredAt(),
-                event.eventId().toString()));
+                correlationId(saga, event)));
     }
 
     private SagaRecord processarExecucaoIniciada(SagaRecord saga, DomainEventEnvelope event) {
@@ -462,7 +472,7 @@ public class AtendimentoSeedStore {
                         saga.orcamentoId(),
                         saga.pagamentoId()),
                 event.occurredAt(),
-                event.eventId().toString()));
+                correlationId(saga, event)));
     }
 
     private SagaRecord processarExecucaoFinalizada(SagaRecord saga, DomainEventEnvelope event) {
@@ -479,7 +489,7 @@ public class AtendimentoSeedStore {
                         "estadoAnterior", TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO.name(),
                         PAYLOAD_ESTADO_ATUAL, TipoDeEstadoDaOrdemDeServico.FINALIZADA.name(),
                         "finalizadaEm", OffsetDateTime.now(ZoneOffset.UTC).toString()),
-                event.eventId().toString(),
+                correlationId(saga, event),
                 OffsetDateTime.now(ZoneOffset.UTC));
         return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.AGUARDANDO_PAGAMENTO,
@@ -491,7 +501,7 @@ public class AtendimentoSeedStore {
                         saga.orcamentoId(),
                         saga.pagamentoId()),
                 event.occurredAt(),
-                event.eventId().toString()));
+                correlationId(saga, event)));
     }
 
     private void finalizarSagaComEntrega(OrdemServicoRecord ordem, String motivo) {
@@ -594,22 +604,71 @@ public class AtendimentoSeedStore {
             Map<String, Object> payload,
             String correlationId,
             OffsetDateTime occurredAt) {
+        var effectiveCorrelationId = correlationId(correlationId);
         var event = new OutboxEventRecord(
                 UUID.randomUUID(),
                 aggregateId,
                 eventType,
                 1,
                 topic,
-                "oficina-os-service",
+                PRODUCER,
                 payload,
                 "PENDING",
-                correlationId,
+                effectiveCorrelationId,
                 occurredAt,
                 OffsetDateTime.now(ZoneOffset.UTC),
                 null,
                 0,
                 null);
         outboxEvents.put(event.eventId(), event);
+        logEvent("outbox event registered", event, "PENDING");
+    }
+
+    private void logEvent(String message, OutboxEventRecord event, String messageStatus) {
+        StructuredLog.info(LOG, message, Map.of(
+                "correlationId", event.correlationId(),
+                "eventId", event.eventId().toString(),
+                "eventType", event.eventType(),
+                "eventVersion", event.eventVersion(),
+                "topic", event.topic(),
+                "producer", event.producer(),
+                "aggregateId", event.aggregateId().toString(),
+                "messageStatus", messageStatus));
+    }
+
+    private void logEvent(
+            String message,
+            DomainEventEnvelope event,
+            String messageStatus,
+            UUID aggregateId,
+            String correlationId) {
+        StructuredLog.info(LOG, message, Map.of(
+                "correlationId", correlationId(correlationId),
+                "eventId", event.eventId().toString(),
+                "eventType", event.eventType(),
+                "eventVersion", event.eventVersion(),
+                "producer", event.producer(),
+                "consumer", PRODUCER,
+                "aggregateId", aggregateId.toString(),
+                "messageStatus", messageStatus));
+    }
+
+    private String correlationId(SagaRecord saga, DomainEventEnvelope event) {
+        if (saga != null && saga.correlationId() != null && !saga.correlationId().isBlank()) {
+            return saga.correlationId();
+        }
+        return event.eventId().toString();
+    }
+
+    private String correlationId(String correlationId) {
+        if (correlationId != null && !correlationId.isBlank()) {
+            return correlationId.trim();
+        }
+        var mdcCorrelationId = MDC.get("correlationId");
+        if (mdcCorrelationId != null && !mdcCorrelationId.toString().isBlank()) {
+            return mdcCorrelationId.toString();
+        }
+        return "local-" + UUID.randomUUID();
     }
 
     private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
