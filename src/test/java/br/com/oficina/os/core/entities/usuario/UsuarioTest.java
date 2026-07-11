@@ -24,7 +24,8 @@ class UsuarioTest {
         assertEquals("Joao", usuario.nome());
         assertEquals(UsuarioStatus.ATIVO, usuario.status());
         assertEquals(2, usuario.papeis().size());
-        assertThrows(UnsupportedOperationException.class, () -> usuario.papeis().add(TipoDePapel.RECEPCIONISTA));
+        var papeis = usuario.papeis();
+        assertThrows(UnsupportedOperationException.class, () -> papeis.add(TipoDePapel.RECEPCIONISTA));
     }
 
     @Test

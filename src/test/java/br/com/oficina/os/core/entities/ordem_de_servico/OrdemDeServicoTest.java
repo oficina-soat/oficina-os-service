@@ -44,11 +44,12 @@ class OrdemDeServicoTest {
     void deveValidarQuantidadeEValorAoAdicionarItens() {
         var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
         ordem.iniciarDiagnostico();
+        var valorUnitarioInvalido = new BigDecimal("-1");
 
         assertThrows(ItemDaOrdemDeServicoInvalidoException.class,
                 () -> ordem.adicionaPeca(1L, "Filtro", BigDecimal.ZERO, BigDecimal.ONE));
         assertThrows(ItemDaOrdemDeServicoInvalidoException.class,
-                () -> ordem.adicionaServico(1L, "Mao de obra", BigDecimal.ONE, new BigDecimal("-1")));
+                () -> ordem.adicionaServico(1L, "Mao de obra", BigDecimal.ONE, valorUnitarioInvalido));
     }
 
     @Test
@@ -66,12 +67,14 @@ class OrdemDeServicoTest {
         var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
         ordem.iniciarDiagnostico();
         ordem.adicionaPeca(1L, "Filtro", BigDecimal.ONE, BigDecimal.ONE);
+        var pecas = ordem.pecas();
+        var historico = ordem.historicoDeEstados();
+        var itemPeca = new ItemPeca(2L, "X", BigDecimal.ONE, BigDecimal.ONE);
+        var estado = new EstadoDaOrdemDeServico(
+                TipoDeEstadoDaOrdemDeServico.RECEBIDA,
+                ordem.dataDoEstado());
 
-        assertThrows(UnsupportedOperationException.class,
-                () -> ordem.pecas().add(new ItemPeca(2L, "X", BigDecimal.ONE, BigDecimal.ONE)));
-        assertThrows(UnsupportedOperationException.class,
-                () -> ordem.historicoDeEstados().add(new EstadoDaOrdemDeServico(
-                        TipoDeEstadoDaOrdemDeServico.RECEBIDA,
-                        ordem.dataDoEstado())));
+        assertThrows(UnsupportedOperationException.class, () -> pecas.add(itemPeca));
+        assertThrows(UnsupportedOperationException.class, () -> historico.add(estado));
     }
 }

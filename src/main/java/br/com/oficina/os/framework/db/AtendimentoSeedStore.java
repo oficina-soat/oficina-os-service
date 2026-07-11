@@ -30,6 +30,14 @@ public class AtendimentoSeedStore {
     public static final UUID SEED_CLIENTE_ID = UUID.fromString("d290f1ee-6c54-4b01-90e6-d701748f0851");
     public static final UUID SEED_VEICULO_ID = UUID.fromString("7b1f1a8d-7f4a-4f25-8e74-27d50210a61e");
     public static final UUID SEED_ORDEM_SERVICO_ID = UUID.fromString("f3d87547-3f5f-4f3a-9e37-b8df70c31696");
+    private static final String EVENT_ORDEM_DE_SERVICO_CRIADA = "ordemDeServicoCriada";
+    private static final String EVENT_SAGA_COMPENSADA = "sagaCompensada";
+    private static final String PAYLOAD_ORDEM_SERVICO_ID = "ordemServicoId";
+    private static final String PAYLOAD_ESTADO_ATUAL = "estadoAtual";
+    private static final String PAYLOAD_EXECUCAO_ID = "execucaoId";
+    private static final String PAYLOAD_ORCAMENTO_ID = "orcamentoId";
+    private static final String PAYLOAD_PAGAMENTO_ID = "pagamentoId";
+    private static final String PAYLOAD_MOTIVO = "motivo";
 
     private final LinkedHashMap<UUID, ClienteRecord> clientes = new LinkedHashMap<>();
     private final LinkedHashMap<UUID, VeiculoRecord> veiculos = new LinkedHashMap<>();
@@ -177,14 +185,14 @@ public class AtendimentoSeedStore {
                 "Ordem de servico recebida"))));
         criarSagaInicial(ordem.ordemServicoId(), agora, null);
         enfileirarEvento(
-                "ordemDeServicoCriada",
+                EVENT_ORDEM_DE_SERVICO_CRIADA,
                 "oficina.os.ordem-de-servico-criada",
                 ordem.ordemServicoId(),
                 Map.of(
-                        "ordemServicoId", ordem.ordemServicoId().toString(),
+                        PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
                         "clienteId", clienteId.toString(),
                         "veiculoId", veiculoId.toString(),
-                        "estadoAtual", ordem.estado().name(),
+                        PAYLOAD_ESTADO_ATUAL, ordem.estado().name(),
                         "criadoEm", agora.toString(),
                         "descricaoProblema", ordem.descricaoProblema()),
                 null,
@@ -284,7 +292,7 @@ public class AtendimentoSeedStore {
         if (consumedEventIds.contains(event.eventId())) {
             return sagasByOrdemServico.get(event.aggregateId());
         }
-        var ordemServicoId = uuidFromPayload(event.payload(), "ordemServicoId", event.aggregateId());
+        var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
         var saga = buscarSaga(ordemServicoId);
         if (saga == null) {
             throw new NotFoundException("Saga da ordem de servico nao encontrada: " + ordemServicoId);
@@ -294,59 +302,58 @@ public class AtendimentoSeedStore {
         return switch (event.eventType()) {
             case "diagnosticoIniciado" -> processarDiagnosticoIniciado(saga, event);
             case "diagnosticoFinalizado" -> processarDiagnosticoFinalizado(saga, event);
-            case "orcamentoGerado" -> transicionarSaga(
-                    saga,
+            case "orcamentoGerado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_APROVACAO,
                     buscarOrdemServico(ordemServicoId).estado(),
                     "orcamentoGerado",
                     null,
-                    saga.execucaoId(),
-                    uuidFromPayload(event.payload(), "orcamentoId", saga.orcamentoId()),
-                    saga.pagamentoId(),
-                    event);
-            case "orcamentoAprovado" -> transicionarSaga(
-                    saga,
+                    new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
+                    event.occurredAt(),
+                    event.eventId().toString()));
+            case "orcamentoAprovado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.EM_EXECUCAO,
                     buscarOrdemServico(ordemServicoId).estado(),
                     "orcamentoAprovado",
                     null,
-                    saga.execucaoId(),
-                    uuidFromPayload(event.payload(), "orcamentoId", saga.orcamentoId()),
-                    saga.pagamentoId(),
-                    event);
+                    new SagaExternalIds(saga.execucaoId(), uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()), saga.pagamentoId()),
+                    event.occurredAt(),
+                    event.eventId().toString()));
             case "orcamentoRecusado" -> processarOrcamentoRecusado(saga, event);
             case "execucaoIniciada" -> processarExecucaoIniciada(saga, event);
             case "execucaoFinalizada" -> processarExecucaoFinalizada(saga, event);
-            case "pagamentoSolicitado" -> transicionarSaga(
-                    saga,
+            case "pagamentoSolicitado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_PAGAMENTO,
                     buscarOrdemServico(ordemServicoId).estado(),
                     "pagamentoSolicitado",
                     null,
-                    saga.execucaoId(),
-                    uuidFromPayload(event.payload(), "orcamentoId", saga.orcamentoId()),
-                    uuidFromPayload(event.payload(), "pagamentoId", saga.pagamentoId()),
-                    event);
-            case "pagamentoConfirmado" -> transicionarSaga(
-                    saga,
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    event.eventId().toString()));
+            case "pagamentoConfirmado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_ENTREGA,
                     buscarOrdemServico(ordemServicoId).estado(),
                     "pagamentoConfirmado",
                     null,
-                    saga.execucaoId(),
-                    saga.orcamentoId(),
-                    uuidFromPayload(event.payload(), "pagamentoId", saga.pagamentoId()),
-                    event);
-            case "pagamentoRecusado" -> transicionarSaga(
-                    saga,
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            saga.orcamentoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    event.eventId().toString()));
+            case "pagamentoRecusado" -> transicionarSaga(saga, new SagaTransition(
                     EstadoSaga.AGUARDANDO_PAGAMENTO,
                     buscarOrdemServico(ordemServicoId).estado(),
                     "pagamentoRecusado",
-                    stringFromPayload(event.payload(), "motivo"),
-                    saga.execucaoId(),
-                    saga.orcamentoId(),
-                    uuidFromPayload(event.payload(), "pagamentoId", saga.pagamentoId()),
-                    event);
+                    stringFromPayload(event.payload(), PAYLOAD_MOTIVO),
+                    new SagaExternalIds(
+                            saga.execucaoId(),
+                            saga.orcamentoId(),
+                            uuidFromPayload(event.payload(), PAYLOAD_PAGAMENTO_ID, saga.pagamentoId())),
+                    event.occurredAt(),
+                    event.eventId().toString()));
             default -> saga;
         };
     }
@@ -357,36 +364,30 @@ public class AtendimentoSeedStore {
             return;
         }
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
-        var emCompensacao = transicionarSaga(
-                saga,
+        var emCompensacao = transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_COMPENSACAO,
                 buscarOrdemServico(ordemServicoId).estado(),
                 "cancelamentoSolicitado",
                 motivo,
-                saga.execucaoId(),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
+                new SagaExternalIds(saga.execucaoId(), saga.orcamentoId(), saga.pagamentoId()),
                 agora,
-                saga.correlationId());
-        transicionarSaga(
-                emCompensacao,
+                saga.correlationId()));
+        transicionarSaga(emCompensacao, new SagaTransition(
                 EstadoSaga.COMPENSADA,
                 buscarOrdemServico(ordemServicoId).estado(),
-                "sagaCompensada",
+                EVENT_SAGA_COMPENSADA,
                 motivo,
-                saga.execucaoId(),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
+                new SagaExternalIds(saga.execucaoId(), saga.orcamentoId(), saga.pagamentoId()),
                 agora,
-                saga.correlationId());
+                saga.correlationId()));
         enfileirarEvento(
-                "sagaCompensada",
+                EVENT_SAGA_COMPENSADA,
                 "oficina.saga.saga-compensada",
                 ordemServicoId,
                 Map.of(
                         "sagaId", saga.sagaId().toString(),
-                        "ordemServicoId", ordemServicoId.toString(),
-                        "motivo", motivo == null ? "Cancelamento solicitado" : motivo,
+                        PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId.toString(),
+                        PAYLOAD_MOTIVO, motivo == null ? "Cancelamento solicitado" : motivo,
                         "compensadaEm", agora.toString()),
                 saga.correlationId(),
                 agora);
@@ -397,16 +398,17 @@ public class AtendimentoSeedStore {
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado");
         }
-        return transicionarSaga(
-                saga,
+        return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
                 TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO,
                 "diagnosticoIniciado",
                 null,
-                uuidFromPayload(event.payload(), "execucaoId", saga.execucaoId()),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
-                event);
+                new SagaExternalIds(
+                        uuidFromPayload(event.payload(), PAYLOAD_EXECUCAO_ID, saga.execucaoId()),
+                        saga.orcamentoId(),
+                        saga.pagamentoId()),
+                event.occurredAt(),
+                event.eventId().toString()));
     }
 
     private SagaRecord processarDiagnosticoFinalizado(SagaRecord saga, DomainEventEnvelope event) {
@@ -414,16 +416,17 @@ public class AtendimentoSeedStore {
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado");
         }
-        return transicionarSaga(
-                saga,
+        return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.AGUARDANDO_ORCAMENTO,
                 TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO,
                 "diagnosticoFinalizado",
                 null,
-                uuidFromPayload(event.payload(), "execucaoId", saga.execucaoId()),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
-                event);
+                new SagaExternalIds(
+                        uuidFromPayload(event.payload(), PAYLOAD_EXECUCAO_ID, saga.execucaoId()),
+                        saga.orcamentoId(),
+                        saga.pagamentoId()),
+                event.occurredAt(),
+                event.eventId().toString()));
     }
 
     private SagaRecord processarOrcamentoRecusado(SagaRecord saga, DomainEventEnvelope event) {
@@ -431,16 +434,17 @@ public class AtendimentoSeedStore {
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Orcamento recusado");
         }
-        return transicionarSaga(
-                saga,
+        return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
                 TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO,
                 "orcamentoRecusado",
-                stringFromPayload(event.payload(), "motivo"),
-                saga.execucaoId(),
-                uuidFromPayload(event.payload(), "orcamentoId", saga.orcamentoId()),
-                saga.pagamentoId(),
-                event);
+                stringFromPayload(event.payload(), PAYLOAD_MOTIVO),
+                new SagaExternalIds(
+                        saga.execucaoId(),
+                        uuidFromPayload(event.payload(), PAYLOAD_ORCAMENTO_ID, saga.orcamentoId()),
+                        saga.pagamentoId()),
+                event.occurredAt(),
+                event.eventId().toString()));
     }
 
     private SagaRecord processarExecucaoIniciada(SagaRecord saga, DomainEventEnvelope event) {
@@ -448,16 +452,17 @@ public class AtendimentoSeedStore {
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada");
         }
-        return transicionarSaga(
-                saga,
+        return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_EXECUCAO,
                 TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO,
                 "execucaoIniciada",
                 null,
-                uuidFromPayload(event.payload(), "execucaoId", saga.execucaoId()),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
-                event);
+                new SagaExternalIds(
+                        uuidFromPayload(event.payload(), PAYLOAD_EXECUCAO_ID, saga.execucaoId()),
+                        saga.orcamentoId(),
+                        saga.pagamentoId()),
+                event.occurredAt(),
+                event.eventId().toString()));
     }
 
     private SagaRecord processarExecucaoFinalizada(SagaRecord saga, DomainEventEnvelope event) {
@@ -470,22 +475,23 @@ public class AtendimentoSeedStore {
                 "oficina.os.ordem-de-servico-finalizada",
                 ordem.ordemServicoId(),
                 Map.of(
-                        "ordemServicoId", ordem.ordemServicoId().toString(),
+                        PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
                         "estadoAnterior", TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO.name(),
-                        "estadoAtual", TipoDeEstadoDaOrdemDeServico.FINALIZADA.name(),
+                        PAYLOAD_ESTADO_ATUAL, TipoDeEstadoDaOrdemDeServico.FINALIZADA.name(),
                         "finalizadaEm", OffsetDateTime.now(ZoneOffset.UTC).toString()),
                 event.eventId().toString(),
                 OffsetDateTime.now(ZoneOffset.UTC));
-        return transicionarSaga(
-                saga,
+        return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.AGUARDANDO_PAGAMENTO,
                 TipoDeEstadoDaOrdemDeServico.FINALIZADA,
                 "execucaoFinalizada",
                 null,
-                uuidFromPayload(event.payload(), "execucaoId", saga.execucaoId()),
-                saga.orcamentoId(),
-                saga.pagamentoId(),
-                event);
+                new SagaExternalIds(
+                        uuidFromPayload(event.payload(), PAYLOAD_EXECUCAO_ID, saga.execucaoId()),
+                        saga.orcamentoId(),
+                        saga.pagamentoId()),
+                event.occurredAt(),
+                event.eventId().toString()));
     }
 
     private void finalizarSagaComEntrega(OrdemServicoRecord ordem, String motivo) {
@@ -499,9 +505,9 @@ public class AtendimentoSeedStore {
                 "oficina.os.ordem-de-servico-entregue",
                 ordem.ordemServicoId(),
                 Map.of(
-                        "ordemServicoId", ordem.ordemServicoId().toString(),
+                        PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
                         "estadoAnterior", TipoDeEstadoDaOrdemDeServico.FINALIZADA.name(),
-                        "estadoAtual", TipoDeEstadoDaOrdemDeServico.ENTREGUE.name(),
+                        PAYLOAD_ESTADO_ATUAL, TipoDeEstadoDaOrdemDeServico.ENTREGUE.name(),
                         "entregueEm", agora.toString()),
                 saga.correlationId(),
                 agora);
@@ -511,12 +517,18 @@ public class AtendimentoSeedStore {
                 ordem.ordemServicoId(),
                 Map.of(
                         "sagaId", saga.sagaId().toString(),
-                        "ordemServicoId", ordem.ordemServicoId().toString(),
+                        PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
                         "finalizadaEm", agora.toString()),
                 saga.correlationId(),
                 agora);
-        transicionarSaga(saga, EstadoSaga.FINALIZADA_COM_SUCESSO, TipoDeEstadoDaOrdemDeServico.ENTREGUE, "entregaFinalizada", motivo,
-                saga.execucaoId(), saga.orcamentoId(), saga.pagamentoId(), agora, saga.correlationId());
+        transicionarSaga(saga, new SagaTransition(
+                EstadoSaga.FINALIZADA_COM_SUCESSO,
+                TipoDeEstadoDaOrdemDeServico.ENTREGUE,
+                "entregaFinalizada",
+                motivo,
+                new SagaExternalIds(saga.execucaoId(), saga.orcamentoId(), saga.pagamentoId()),
+                agora,
+                saga.correlationId()));
     }
 
     private SagaRecord criarSagaInicial(UUID ordemServicoId, OffsetDateTime agora, String correlationId) {
@@ -525,7 +537,7 @@ public class AtendimentoSeedStore {
                 ordemServicoId,
                 EstadoSaga.INICIADA,
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
-                "ordemDeServicoCriada",
+                EVENT_ORDEM_DE_SERVICO_CRIADA,
                 null,
                 null,
                 null,
@@ -539,56 +551,39 @@ public class AtendimentoSeedStore {
                 null,
                 EstadoSaga.INICIADA,
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
-                "ordemDeServicoCriada",
+                EVENT_ORDEM_DE_SERVICO_CRIADA,
                 null,
                 agora))));
         return saga;
     }
 
-    private SagaRecord transicionarSaga(
-            SagaRecord saga,
-            EstadoSaga novoEstado,
-            TipoDeEstadoDaOrdemDeServico estadoOrdemServico,
-            String etapa,
-            String motivo,
-            UUID execucaoId,
-            UUID orcamentoId,
-            UUID pagamentoId,
-            DomainEventEnvelope event) {
-        return transicionarSaga(saga, novoEstado, estadoOrdemServico, etapa, motivo, execucaoId, orcamentoId, pagamentoId,
-                event.occurredAt(), event.eventId().toString());
-    }
-
-    private SagaRecord transicionarSaga(
-            SagaRecord saga,
-            EstadoSaga novoEstado,
-            TipoDeEstadoDaOrdemDeServico estadoOrdemServico,
-            String etapa,
-            String motivo,
-            UUID execucaoId,
-            UUID orcamentoId,
-            UUID pagamentoId,
-            OffsetDateTime ocorridoEm,
-            String correlationId) {
-        if (saga.estado() == novoEstado && etapa.equals(saga.ultimaEtapa())) {
+    private SagaRecord transicionarSaga(SagaRecord saga, SagaTransition transition) {
+        if (saga.estado() == transition.novoEstado() && transition.etapa().equals(saga.ultimaEtapa())) {
             return saga;
         }
         var atualizada = new SagaRecord(
                 saga.sagaId(),
                 saga.ordemServicoId(),
-                novoEstado,
-                estadoOrdemServico,
-                etapa,
-                execucaoId,
-                orcamentoId,
-                pagamentoId,
-                correlationId,
+                transition.novoEstado(),
+                transition.estadoOrdemServico(),
+                transition.etapa(),
+                transition.ids().execucaoId(),
+                transition.ids().orcamentoId(),
+                transition.ids().pagamentoId(),
+                transition.correlationId(),
                 saga.criadoEm(),
-                ocorridoEm,
-                motivo);
+                transition.ocorridoEm(),
+                transition.motivo());
         sagasByOrdemServico.put(saga.ordemServicoId(), atualizada);
         sagaHistoricos.computeIfAbsent(saga.sagaId(), _ -> new ArrayList<>())
-                .add(new SagaHistoricoRecord(saga.sagaId(), saga.estado(), novoEstado, estadoOrdemServico, etapa, motivo, ocorridoEm));
+                .add(new SagaHistoricoRecord(
+                        saga.sagaId(),
+                        saga.estado(),
+                        transition.novoEstado(),
+                        transition.estadoOrdemServico(),
+                        transition.etapa(),
+                        transition.motivo(),
+                        transition.ocorridoEm()));
         return atualizada;
     }
 
@@ -669,6 +664,22 @@ public class AtendimentoSeedStore {
 
     private static String normalizar(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    private record SagaExternalIds(
+            UUID execucaoId,
+            UUID orcamentoId,
+            UUID pagamentoId) {
+    }
+
+    private record SagaTransition(
+            EstadoSaga novoEstado,
+            TipoDeEstadoDaOrdemDeServico estadoOrdemServico,
+            String etapa,
+            String motivo,
+            SagaExternalIds ids,
+            OffsetDateTime ocorridoEm,
+            String correlationId) {
     }
 
     public record ClienteRecord(

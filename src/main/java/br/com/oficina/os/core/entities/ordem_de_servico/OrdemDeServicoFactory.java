@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.UUID;
 
 public class OrdemDeServicoFactory {
+    private OrdemDeServicoFactory() {
+    }
+
     public static OrdemDeServico criarNovo(
             UUID clienteId,
             UUID veiculoId) {

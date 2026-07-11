@@ -78,7 +78,7 @@ class PlatformContractsTest {
     }
 
     @Test
-    void deveValidarEventosProduzidosEConsumidosContraSchemasJson() throws IOException {
+    void deveValidarEventosProduzidosEConsumidosContraSchemasJson() {
         producedEvents().forEach((eventType, topic) ->
                 assertEventSchema(eventType, "oficina-os-service", topic));
 

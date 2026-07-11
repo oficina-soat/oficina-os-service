@@ -6,8 +6,12 @@ import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class DomainEventConsumer {
+    private final AtendimentoSeedStore store;
+
     @Inject
-    AtendimentoSeedStore store;
+    public DomainEventConsumer(AtendimentoSeedStore store) {
+        this.store = store;
+    }
 
     public AtendimentoSeedStore.SagaRecord consumir(DomainEventEnvelope event) {
         return store.consumirEvento(event);

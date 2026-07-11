@@ -11,7 +11,7 @@ public enum UsuarioStatus {
 
         try {
             return valueOf(status.trim().toUpperCase());
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException _) {
             throw new IllegalArgumentException("Status inválido: " + status);
         }
     }
