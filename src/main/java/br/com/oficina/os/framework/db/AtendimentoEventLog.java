@@ -11,13 +11,14 @@ import org.jboss.logging.MDC;
 
 final class AtendimentoEventLog {
     private static final String CONSUMER = "oficina-os-service";
+    private static final String FIELD_CORRELATION_ID = "correlationId";
 
     private AtendimentoEventLog() {
     }
 
     static void logEvent(Logger log, String message, OutboxEventRecord event, String messageStatus) {
         StructuredLog.info(log, message, Map.of(
-                "correlationId", event.correlationId(),
+                FIELD_CORRELATION_ID, event.correlationId(),
                 "eventId", event.eventId().toString(),
                 "eventType", event.eventType(),
                 "eventVersion", event.eventVersion(),
@@ -35,7 +36,7 @@ final class AtendimentoEventLog {
             UUID aggregateId,
             String correlationId) {
         StructuredLog.info(log, message, Map.of(
-                "correlationId", correlationId(correlationId),
+                FIELD_CORRELATION_ID, correlationId(correlationId),
                 "eventId", event.eventId().toString(),
                 "eventType", event.eventType(),
                 "eventVersion", event.eventVersion(),
@@ -56,7 +57,7 @@ final class AtendimentoEventLog {
         if (correlationId != null && !correlationId.isBlank()) {
             return correlationId.trim();
         }
-        var mdcCorrelationId = MDC.get("correlationId");
+        var mdcCorrelationId = MDC.get(FIELD_CORRELATION_ID);
         if (mdcCorrelationId != null && !mdcCorrelationId.toString().isBlank()) {
             return mdcCorrelationId.toString();
         }

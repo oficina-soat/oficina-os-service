@@ -11,13 +11,6 @@ import br.com.oficina.os.core.entities.veiculo.MarcaDeVeiculo;
 import br.com.oficina.os.core.entities.veiculo.ModeloDeVeiculo;
 import br.com.oficina.os.core.entities.veiculo.PlacaDeVeiculo;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.HistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OperacaoAssincronaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaHistoricoRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
-import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import jakarta.ws.rs.NotFoundException;
@@ -46,6 +39,8 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private static final String PAYLOAD_ORCAMENTO_ID = "orcamentoId";
     private static final String PAYLOAD_PAGAMENTO_ID = "pagamentoId";
     private static final String PAYLOAD_MOTIVO = "motivo";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
 
     private final LinkedHashMap<UUID, ClienteRecord> clientes = new LinkedHashMap<>();
     private final LinkedHashMap<UUID, VeiculoRecord> veiculos = new LinkedHashMap<>();
@@ -295,7 +290,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
         var publicados = new ArrayList<OutboxEventRecord>();
         for (var event : new ArrayList<>(outboxEvents.values())) {
-            if (!"PENDING".equals(event.status())) {
+            if (!STATUS_PENDING.equals(event.status())) {
                 continue;
             }
             var publicado = new OutboxEventRecord(
@@ -306,7 +301,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                     event.topic(),
                     event.producer(),
                     event.payload(),
-                    "PUBLISHED",
+                    STATUS_PUBLISHED,
                     event.correlationId(),
                     event.occurredAt(),
                     event.createdAt(),
@@ -315,7 +310,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                     null);
             outboxEvents.put(publicado.eventId(), publicado);
             publicados.add(publicado);
-            logEvent(LOG, "outbox event published", publicado, "PUBLISHED");
+            logEvent(LOG, "outbox event published", publicado, STATUS_PUBLISHED);
         }
         return publicados;
     }
@@ -640,7 +635,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 topic,
                 PRODUCER,
                 payload,
-                "PENDING",
+                STATUS_PENDING,
                 effectiveCorrelationId,
                 occurredAt,
                 OffsetDateTime.now(ZoneOffset.UTC),
@@ -648,7 +643,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 0,
                 null);
         outboxEvents.put(event.eventId(), event);
-        logEvent(LOG, "outbox event registered", event, "PENDING");
+        logEvent(LOG, "outbox event registered", event, STATUS_PENDING);
     }
 
     private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
