@@ -1,5 +1,8 @@
 package br.com.oficina.os.framework.db;
 
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.correlationId;
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.logEvent;
+
 import br.com.oficina.os.core.entities.cliente.DocumentoFactory;
 import br.com.oficina.os.core.entities.cliente.Email;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
@@ -17,7 +20,6 @@ import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.SagaRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
-import br.com.oficina.os.framework.observability.StructuredLog;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -32,7 +34,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jboss.logging.Logger;
-import org.jboss.logging.MDC;
 
 class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private static final Logger LOG = Logger.getLogger(InMemoryAtendimentoGateway.class);
@@ -314,7 +315,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                     null);
             outboxEvents.put(publicado.eventId(), publicado);
             publicados.add(publicado);
-            logEvent("outbox event published", publicado, "PUBLISHED");
+            logEvent(LOG, "outbox event published", publicado, "PUBLISHED");
         }
         return publicados;
     }
@@ -323,7 +324,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     public synchronized SagaRecord consumirEvento(DomainEventEnvelope event) {
         if (consumedEventIds.contains(event.eventId())) {
             var saga = sagasByOrdemServico.get(event.aggregateId());
-            logEvent("domain event ignored", event, "DUPLICATE", event.aggregateId(), correlationId(saga, event));
+            logEvent(LOG, "domain event ignored", event, "DUPLICATE", event.aggregateId(), correlationId(saga, event));
             return saga;
         }
         var ordemServicoId = uuidFromPayload(event.payload(), PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
@@ -390,7 +391,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                     correlationId(saga, event)));
             default -> saga;
         };
-        logEvent("domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
+        logEvent(LOG, "domain event consumed", event, "CONSUMED", ordemServicoId, correlationId(resultado, event));
         return resultado;
     }
 
@@ -647,54 +648,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 0,
                 null);
         outboxEvents.put(event.eventId(), event);
-        logEvent("outbox event registered", event, "PENDING");
-    }
-
-    private void logEvent(String message, OutboxEventRecord event, String messageStatus) {
-        StructuredLog.info(LOG, message, Map.of(
-                "correlationId", event.correlationId(),
-                "eventId", event.eventId().toString(),
-                "eventType", event.eventType(),
-                "eventVersion", event.eventVersion(),
-                "topic", event.topic(),
-                "producer", event.producer(),
-                "aggregateId", event.aggregateId().toString(),
-                "messageStatus", messageStatus));
-    }
-
-    private void logEvent(
-            String message,
-            DomainEventEnvelope event,
-            String messageStatus,
-            UUID aggregateId,
-            String correlationId) {
-        StructuredLog.info(LOG, message, Map.of(
-                "correlationId", correlationId(correlationId),
-                "eventId", event.eventId().toString(),
-                "eventType", event.eventType(),
-                "eventVersion", event.eventVersion(),
-                "producer", event.producer(),
-                "consumer", PRODUCER,
-                "aggregateId", aggregateId.toString(),
-                "messageStatus", messageStatus));
-    }
-
-    private String correlationId(SagaRecord saga, DomainEventEnvelope event) {
-        if (saga != null && saga.correlationId() != null && !saga.correlationId().isBlank()) {
-            return saga.correlationId();
-        }
-        return event.eventId().toString();
-    }
-
-    private String correlationId(String correlationId) {
-        if (correlationId != null && !correlationId.isBlank()) {
-            return correlationId.trim();
-        }
-        var mdcCorrelationId = MDC.get("correlationId");
-        if (mdcCorrelationId != null && !mdcCorrelationId.toString().isBlank()) {
-            return mdcCorrelationId.toString();
-        }
-        return "local-" + UUID.randomUUID();
+        logEvent(LOG, "outbox event registered", event, "PENDING");
     }
 
     private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
