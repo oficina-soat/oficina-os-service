@@ -17,8 +17,15 @@ import br.com.oficina.os.core.usecases.veiculo.AtualizarVeiculoUseCase;
 import br.com.oficina.os.core.usecases.veiculo.BuscarVeiculoUseCase;
 import br.com.oficina.os.core.usecases.veiculo.CriarVeiculoUseCase;
 import br.com.oficina.os.core.usecases.veiculo.ListarVeiculosDoClienteUseCase;
+import br.com.oficina.os.interfaces.controllers.ClientesController;
+import br.com.oficina.os.interfaces.controllers.OrdensServicoController;
+import br.com.oficina.os.interfaces.controllers.StatusController;
+import br.com.oficina.os.interfaces.controllers.VeiculosController;
+import br.com.oficina.os.interfaces.presenters.AtendimentoPresenterAdapter;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Produces;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class AtendimentoConfiguration {
@@ -100,5 +107,64 @@ public class AtendimentoConfiguration {
     @Produces
     PublicarEventosPendentesUseCase publicarEventosPendentesUseCase(AtendimentoGateway gateway) {
         return new PublicarEventosPendentesUseCase(gateway);
+    }
+
+    @Produces
+    ClientesController clientesController(
+            CriarClienteUseCase criarCliente,
+            ListarClientesUseCase listarClientes,
+            BuscarClienteUseCase buscarCliente,
+            AtualizarClienteUseCase atualizarCliente,
+            CriarVeiculoUseCase criarVeiculo,
+            ListarVeiculosDoClienteUseCase listarVeiculosDoCliente,
+            AtendimentoPresenterAdapter presenter) {
+        return new ClientesController(
+                criarCliente,
+                listarClientes,
+                buscarCliente,
+                atualizarCliente,
+                criarVeiculo,
+                listarVeiculosDoCliente,
+                presenter);
+    }
+
+    @Produces
+    VeiculosController veiculosController(
+            BuscarVeiculoUseCase buscarVeiculo,
+            AtualizarVeiculoUseCase atualizarVeiculo,
+            AtendimentoPresenterAdapter presenter) {
+        return new VeiculosController(buscarVeiculo, atualizarVeiculo, presenter);
+    }
+
+    @Produces
+    OrdensServicoController ordensServicoController(
+            AbrirOrdemServicoUseCase abrirOrdemServico,
+            ListarOrdensServicoUseCase listarOrdensServico,
+            BuscarOrdemServicoUseCase buscarOrdemServico,
+            ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico,
+            AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico,
+            CancelarOrdemServicoUseCase cancelarOrdemServico,
+            AtendimentoPresenterAdapter presenter) {
+        return new OrdensServicoController(
+                abrirOrdemServico,
+                listarOrdensServico,
+                buscarOrdemServico,
+                consultarHistoricoOrdemServico,
+                alterarEstadoOrdemServico,
+                cancelarOrdemServico,
+                presenter);
+    }
+
+    @Produces
+    StatusController statusController(
+            @ConfigProperty(name = "quarkus.application.name") String applicationName,
+            @ConfigProperty(name = "oficina.observability.deployment-environment") String environment) {
+        return new StatusController(applicationName, environment);
+    }
+
+    @Produces
+    @RequestScoped
+    AtendimentoPresenterAdapter atendimentoPresenter() {
+        return new AtendimentoPresenterAdapter();
     }
 }

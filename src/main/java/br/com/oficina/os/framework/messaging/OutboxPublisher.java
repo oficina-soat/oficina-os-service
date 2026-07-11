@@ -17,6 +17,6 @@ public class OutboxPublisher {
     }
 
     public List<OutboxEventRecord> publicarPendentes() {
-        return publicarEventosPendentes.executar();
+        return publicarEventosPendentes.executar().join();
     }
 }

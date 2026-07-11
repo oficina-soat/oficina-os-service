@@ -4,6 +4,7 @@ import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeSer
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class ListarOrdensServicoUseCase {
     private final AtendimentoGateway gateway;
@@ -12,7 +13,7 @@ public class ListarOrdensServicoUseCase {
         this.gateway = gateway;
     }
 
-    public List<OrdemServicoRecord> executar(TipoDeEstadoDaOrdemDeServico estado) {
-        return gateway.listarOrdensServico(estado);
+    public CompletableFuture<List<OrdemServicoRecord>> executar(TipoDeEstadoDaOrdemDeServico estado) {
+        return CompletableFuture.completedFuture(gateway.listarOrdensServico(estado));
     }
 }

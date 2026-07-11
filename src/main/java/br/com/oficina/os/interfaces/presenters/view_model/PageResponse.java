@@ -1,4 +1,4 @@
-package br.com.oficina.os.interfaces.controllers;
+package br.com.oficina.os.interfaces.presenters.view_model;
 
 import java.util.List;
 

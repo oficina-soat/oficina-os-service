@@ -4,16 +4,15 @@ import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteRecor
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.HistoricoRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
-import br.com.oficina.os.interfaces.controllers.ClientesResource;
-import br.com.oficina.os.interfaces.controllers.OrdensServicoResource;
-import br.com.oficina.os.interfaces.controllers.VeiculosResource;
-import jakarta.enterprise.context.ApplicationScoped;
+import br.com.oficina.os.interfaces.presenters.view_model.ClienteViewModel;
+import br.com.oficina.os.interfaces.presenters.view_model.HistoricoOrdemServicoViewModel;
+import br.com.oficina.os.interfaces.presenters.view_model.OrdemServicoViewModel;
+import br.com.oficina.os.interfaces.presenters.view_model.VeiculoViewModel;
 
-@ApplicationScoped
-public class AtendimentoPresenter {
+public class AtendimentoPresenterAdapter {
 
-    public ClientesResource.ClienteResponse cliente(ClienteRecord cliente) {
-        return new ClientesResource.ClienteResponse(
+    public ClienteViewModel cliente(ClienteRecord cliente) {
+        return new ClienteViewModel(
                 cliente.clienteId(),
                 cliente.nome(),
                 cliente.documento(),
@@ -23,8 +22,8 @@ public class AtendimentoPresenter {
                 cliente.atualizadoEm());
     }
 
-    public VeiculosResource.VeiculoResponse veiculo(VeiculoRecord veiculo) {
-        return new VeiculosResource.VeiculoResponse(
+    public VeiculoViewModel veiculo(VeiculoRecord veiculo) {
+        return new VeiculoViewModel(
                 veiculo.veiculoId(),
                 veiculo.clienteId(),
                 veiculo.placa(),
@@ -35,8 +34,8 @@ public class AtendimentoPresenter {
                 veiculo.atualizadoEm());
     }
 
-    public OrdensServicoResource.OrdemServicoResponse ordemServico(OrdemServicoRecord ordem) {
-        return new OrdensServicoResource.OrdemServicoResponse(
+    public OrdemServicoViewModel ordemServico(OrdemServicoRecord ordem) {
+        return new OrdemServicoViewModel(
                 ordem.ordemServicoId(),
                 ordem.clienteId(),
                 ordem.veiculoId(),
@@ -46,8 +45,8 @@ public class AtendimentoPresenter {
                 ordem.atualizadoEm());
     }
 
-    public OrdensServicoResource.HistoricoOrdemServicoResponse historico(HistoricoRecord historico) {
-        return new OrdensServicoResource.HistoricoOrdemServicoResponse(
+    public HistoricoOrdemServicoViewModel historico(HistoricoRecord historico) {
+        return new HistoricoOrdemServicoViewModel(
                 historico.estado(),
                 historico.dataDoEstado(),
                 historico.motivo());

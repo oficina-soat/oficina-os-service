@@ -3,6 +3,7 @@ package br.com.oficina.os.core.usecases.veiculo;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.VeiculoRecord;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class BuscarVeiculoUseCase {
     private final AtendimentoGateway gateway;
@@ -11,7 +12,7 @@ public class BuscarVeiculoUseCase {
         this.gateway = gateway;
     }
 
-    public VeiculoRecord executar(UUID veiculoId) {
-        return gateway.buscarVeiculo(veiculoId);
+    public CompletableFuture<VeiculoRecord> executar(UUID veiculoId) {
+        return CompletableFuture.completedFuture(gateway.buscarVeiculo(veiculoId));
     }
 }

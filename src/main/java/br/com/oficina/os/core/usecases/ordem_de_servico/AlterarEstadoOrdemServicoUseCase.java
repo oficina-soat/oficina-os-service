@@ -4,6 +4,7 @@ import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeSer
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.OrdemServicoRecord;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class AlterarEstadoOrdemServicoUseCase {
     private final AtendimentoGateway gateway;
@@ -12,7 +13,16 @@ public class AlterarEstadoOrdemServicoUseCase {
         this.gateway = gateway;
     }
 
-    public OrdemServicoRecord executar(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
-        return gateway.alterarEstado(ordemServicoId, novoEstado, motivo);
+    public CompletableFuture<OrdemServicoRecord> executar(Command command) {
+        return CompletableFuture.completedFuture(gateway.alterarEstado(
+                command.ordemServicoId(),
+                command.novoEstado(),
+                command.motivo()));
+    }
+
+    public record Command(
+            UUID ordemServicoId,
+            TipoDeEstadoDaOrdemDeServico novoEstado,
+            String motivo) {
     }
 }

@@ -16,6 +16,6 @@ public class DomainEventConsumer {
     }
 
     public SagaRecord consumir(DomainEventEnvelope event) {
-        return consumirEventoDaSaga.executar(event);
+        return consumirEventoDaSaga.executar(event).join();
     }
 }
