@@ -2,14 +2,10 @@ package br.com.oficina.os.framework.db;
 
 import static br.com.oficina.os.framework.db.AtendimentoEventLog.correlationId;
 import static br.com.oficina.os.framework.db.AtendimentoEventLog.logEvent;
+import static br.com.oficina.os.framework.db.AtendimentoGatewaySupport.*;
 
-import br.com.oficina.os.core.entities.cliente.DocumentoFactory;
-import br.com.oficina.os.core.entities.cliente.Email;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
-import br.com.oficina.os.core.entities.veiculo.MarcaDeVeiculo;
-import br.com.oficina.os.core.entities.veiculo.ModeloDeVeiculo;
-import br.com.oficina.os.core.entities.veiculo.PlacaDeVeiculo;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
@@ -39,20 +35,28 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final TypeReference<LinkedHashMap<String, Object>> JSON_MAP = new TypeReference<>() {
     };
-    private static final String PRODUCER = "oficina-os-service";
-    private static final String EVENT_ORDEM_DE_SERVICO_CRIADA = "ordemDeServicoCriada";
-    private static final String EVENT_SAGA_COMPENSADA = "sagaCompensada";
-    private static final String PAYLOAD_ORDEM_SERVICO_ID = "ordemServicoId";
-    private static final String PAYLOAD_ESTADO_ATUAL = "estadoAtual";
-    private static final String PAYLOAD_EXECUCAO_ID = "execucaoId";
-    private static final String PAYLOAD_ORCAMENTO_ID = "orcamentoId";
-    private static final String PAYLOAD_PAGAMENTO_ID = "pagamentoId";
-    private static final String PAYLOAD_MOTIVO = "motivo";
-    private static final String STATUS_PENDING = "PENDING";
-    private static final String STATUS_PUBLISHED = "PUBLISHED";
     private static final String COLUMN_CLIENTE_ID = "cliente_id";
     private static final String COLUMN_CRIADO_EM = "criado_em";
     private static final String COLUMN_ATUALIZADO_EM = "atualizado_em";
+    private static final String SQL_SELECT_OUTBOX = """
+            SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                   correlation_id, occurred_at, created_at, published_at, attempts, last_error
+            FROM outbox_event
+            ORDER BY created_at
+            """;
+    private static final String SQL_SELECT_OUTBOX_BY_STATUS_FOR_UPDATE = """
+            SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                   correlation_id, occurred_at, created_at, published_at, attempts, last_error
+            FROM outbox_event
+            WHERE status = ?
+            ORDER BY created_at
+            FOR UPDATE
+            """;
+    private static final String SQL_MARK_OUTBOX_PUBLISHED = """
+            UPDATE outbox_event
+            SET status = ?, published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
+            WHERE id = ?
+            """;
 
     private final DataSource dataSource;
 
@@ -482,12 +486,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
 
     private List<OutboxEventRecord> listarOutboxPostgres() {
         try (var connection = dataSource.getConnection();
-                var statement = connection.prepareStatement("""
-                        SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                               correlation_id, occurred_at, created_at, published_at, attempts, last_error
-                        FROM outbox_event
-                        ORDER BY created_at
-                        """);
+                var statement = connection.prepareStatement(SQL_SELECT_OUTBOX);
                 var resultSet = statement.executeQuery()) {
             var result = new ArrayList<OutboxEventRecord>();
             while (resultSet.next()) {
@@ -503,26 +502,18 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
         var publicados = inTransaction(connection -> {
             var pendentes = new ArrayList<OutboxEventRecord>();
-            try (var statement = connection.prepareStatement("""
-                    SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                           correlation_id, occurred_at, created_at, published_at, attempts, last_error
-                    FROM outbox_event
-                    WHERE status = 'PENDING'
-                    ORDER BY created_at
-                    FOR UPDATE
-                    """);
-                    var resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    pendentes.add(toOutboxEvent(resultSet));
+            try (var statement = connection.prepareStatement(SQL_SELECT_OUTBOX_BY_STATUS_FOR_UPDATE)) {
+                statement.setString(1, STATUS_PENDING);
+                try (var resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        pendentes.add(toOutboxEvent(resultSet));
+                    }
                 }
             }
             var events = new ArrayList<OutboxEventRecord>();
-            try (var statement = connection.prepareStatement("""
-                    UPDATE outbox_event
-                    SET status = 'PUBLISHED', published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
-                    WHERE id = ?
-                    """)) {
-                statement.setObject(1, agora);
+            try (var statement = connection.prepareStatement(SQL_MARK_OUTBOX_PUBLISHED)) {
+                statement.setString(1, STATUS_PUBLISHED);
+                statement.setObject(2, agora);
                 for (var event : pendentes) {
                     var publicado = new OutboxEventRecord(
                             event.eventId(),
@@ -539,8 +530,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                             agora,
                             event.attempts() + 1,
                             null);
-                    statement.setInt(2, publicado.attempts());
-                    statement.setObject(3, publicado.eventId());
+                    statement.setInt(3, publicado.attempts());
+                    statement.setObject(4, publicado.eventId());
                     statement.addBatch();
                     events.add(publicado);
                 }
@@ -1306,76 +1297,6 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         } catch (SQLException _) {
             // The original persistence failure is more useful to callers.
         }
-    }
-
-    private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
-        var value = payload.get(fieldName);
-        if (value == null) {
-            return fallback;
-        }
-        if (value instanceof UUID uuid) {
-            return uuid;
-        }
-        return UUID.fromString(value.toString());
-    }
-
-    private static String stringFromPayload(Map<String, Object> payload, String fieldName) {
-        var value = payload.get(fieldName);
-        return value == null ? null : value.toString();
-    }
-
-    private static void validarCliente(String nome, String documento, String email) {
-        if (nome == null || nome.isBlank()) {
-            throw new IllegalArgumentException("Nome do cliente e obrigatorio.");
-        }
-        DocumentoFactory.from(documento);
-        if (email != null && !email.isBlank()) {
-            new Email(email);
-        }
-    }
-
-    private static void validarVeiculo(String placa, String marca, String modelo, int ano) {
-        new PlacaDeVeiculo(placa);
-        new MarcaDeVeiculo(marca);
-        new ModeloDeVeiculo(modelo);
-        if (ano < 1900) {
-            throw new IllegalArgumentException("Ano do veiculo deve ser maior ou igual a 1900.");
-        }
-    }
-
-    private static void validarTransicao(TipoDeEstadoDaOrdemDeServico atual, TipoDeEstadoDaOrdemDeServico novo) {
-        boolean valida = switch (atual) {
-            case RECEBIDA -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_DIAGNOSTICO -> novo == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO;
-            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO
-                    || novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_EXECUCAO -> novo == TipoDeEstadoDaOrdemDeServico.FINALIZADA;
-            case FINALIZADA -> novo == TipoDeEstadoDaOrdemDeServico.ENTREGUE;
-            case ENTREGUE -> false;
-        };
-        if (!valida) {
-            throw new WebApplicationException("Transicao de estado invalida: " + atual + " -> " + novo, Response.Status.CONFLICT);
-        }
-    }
-
-    private static String normalizar(String valor) {
-        return valor == null || valor.isBlank() ? null : valor.trim();
-    }
-
-    private record SagaExternalIds(
-            UUID execucaoId,
-            UUID orcamentoId,
-            UUID pagamentoId) {
-    }
-
-    private record SagaTransition(
-            EstadoSaga novoEstado,
-            TipoDeEstadoDaOrdemDeServico estadoOrdemServico,
-            String etapa,
-            String motivo,
-            SagaExternalIds ids,
-            OffsetDateTime ocorridoEm,
-            String correlationId) {
     }
 
     @FunctionalInterface

@@ -2,14 +2,10 @@ package br.com.oficina.os.framework.db;
 
 import static br.com.oficina.os.framework.db.AtendimentoEventLog.correlationId;
 import static br.com.oficina.os.framework.db.AtendimentoEventLog.logEvent;
+import static br.com.oficina.os.framework.db.AtendimentoGatewaySupport.*;
 
-import br.com.oficina.os.core.entities.cliente.DocumentoFactory;
-import br.com.oficina.os.core.entities.cliente.Email;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
-import br.com.oficina.os.core.entities.veiculo.MarcaDeVeiculo;
-import br.com.oficina.os.core.entities.veiculo.ModeloDeVeiculo;
-import br.com.oficina.os.core.entities.veiculo.PlacaDeVeiculo;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
@@ -30,17 +26,6 @@ import org.jboss.logging.Logger;
 
 class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private static final Logger LOG = Logger.getLogger(InMemoryAtendimentoGateway.class);
-    private static final String PRODUCER = "oficina-os-service";
-    private static final String EVENT_ORDEM_DE_SERVICO_CRIADA = "ordemDeServicoCriada";
-    private static final String EVENT_SAGA_COMPENSADA = "sagaCompensada";
-    private static final String PAYLOAD_ORDEM_SERVICO_ID = "ordemServicoId";
-    private static final String PAYLOAD_ESTADO_ATUAL = "estadoAtual";
-    private static final String PAYLOAD_EXECUCAO_ID = "execucaoId";
-    private static final String PAYLOAD_ORCAMENTO_ID = "orcamentoId";
-    private static final String PAYLOAD_PAGAMENTO_ID = "pagamentoId";
-    private static final String PAYLOAD_MOTIVO = "motivo";
-    private static final String STATUS_PENDING = "PENDING";
-    private static final String STATUS_PUBLISHED = "PUBLISHED";
 
     private final LinkedHashMap<UUID, ClienteRecord> clientes = new LinkedHashMap<>();
     private final LinkedHashMap<UUID, VeiculoRecord> veiculos = new LinkedHashMap<>();
@@ -646,73 +631,4 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
         logEvent(LOG, "outbox event registered", event, STATUS_PENDING);
     }
 
-    private static UUID uuidFromPayload(Map<String, Object> payload, String fieldName, UUID fallback) {
-        var value = payload.get(fieldName);
-        if (value == null) {
-            return fallback;
-        }
-        if (value instanceof UUID uuid) {
-            return uuid;
-        }
-        return UUID.fromString(value.toString());
-    }
-
-    private static String stringFromPayload(Map<String, Object> payload, String fieldName) {
-        var value = payload.get(fieldName);
-        return value == null ? null : value.toString();
-    }
-
-    private static void validarCliente(String nome, String documento, String email) {
-        if (nome == null || nome.isBlank()) {
-            throw new IllegalArgumentException("Nome do cliente e obrigatorio.");
-        }
-        DocumentoFactory.from(documento);
-        if (email != null && !email.isBlank()) {
-            new Email(email);
-        }
-    }
-
-    private static void validarVeiculo(String placa, String marca, String modelo, int ano) {
-        new PlacaDeVeiculo(placa);
-        new MarcaDeVeiculo(marca);
-        new ModeloDeVeiculo(modelo);
-        if (ano < 1900) {
-            throw new IllegalArgumentException("Ano do veiculo deve ser maior ou igual a 1900.");
-        }
-    }
-
-    private static void validarTransicao(TipoDeEstadoDaOrdemDeServico atual, TipoDeEstadoDaOrdemDeServico novo) {
-        boolean valida = switch (atual) {
-            case RECEBIDA -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_DIAGNOSTICO -> novo == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO;
-            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO
-                    || novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_EXECUCAO -> novo == TipoDeEstadoDaOrdemDeServico.FINALIZADA;
-            case FINALIZADA -> novo == TipoDeEstadoDaOrdemDeServico.ENTREGUE;
-            case ENTREGUE -> false;
-        };
-        if (!valida) {
-            throw new WebApplicationException("Transicao de estado invalida: " + atual + " -> " + novo, Response.Status.CONFLICT);
-        }
-    }
-
-    private static String normalizar(String valor) {
-        return valor == null || valor.isBlank() ? null : valor.trim();
-    }
-
-    private record SagaExternalIds(
-            UUID execucaoId,
-            UUID orcamentoId,
-            UUID pagamentoId) {
-    }
-
-    private record SagaTransition(
-            EstadoSaga novoEstado,
-            TipoDeEstadoDaOrdemDeServico estadoOrdemServico,
-            String etapa,
-            String motivo,
-            SagaExternalIds ids,
-            OffsetDateTime ocorridoEm,
-            String correlationId) {
-    }
 }
