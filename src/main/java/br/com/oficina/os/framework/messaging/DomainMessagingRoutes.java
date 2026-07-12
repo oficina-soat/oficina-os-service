@@ -14,7 +14,10 @@ final class DomainMessagingRoutes {
             Map.entry("ordemDeServicoFinalizada", "oficina.os.ordem-de-servico-finalizada"),
             Map.entry("ordemDeServicoEntregue", "oficina.os.ordem-de-servico-entregue"),
             Map.entry("sagaCompensada", "oficina.saga.saga-compensada"),
-            Map.entry("sagaFinalizadaComSucesso", "oficina.saga.saga-finalizada-com-sucesso")));
+            Map.entry("sagaFinalizadaComSucesso", "oficina.saga.saga-finalizada-com-sucesso"),
+            Map.entry("usuarioAdicionado", "oficina.os.usuario-adicionado"),
+            Map.entry("usuarioAtualizado", "oficina.os.usuario-atualizado"),
+            Map.entry("usuarioExcluido", "oficina.os.usuario-excluido")));
 
     private static final Map<String, String> CONSUMED_TOPICS = orderedMap(Map.ofEntries(
             Map.entry("diagnosticoIniciado", "oficina.execution.diagnostico-iniciado"),

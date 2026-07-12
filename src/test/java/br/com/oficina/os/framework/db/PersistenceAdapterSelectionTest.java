@@ -15,6 +15,11 @@ class PersistenceAdapterSelectionTest {
         var atendimento = new AtendimentoSeedStore("memory", null);
         assertEquals("Maria Souza", atendimento.buscarCliente(AtendimentoSeedStore.SEED_CLIENTE_ID).nome());
 
+        var usuarios = new UsuarioStore(null, "memory");
+        assertEquals(
+                "Administrador Laboratorio",
+                usuarios.buscar(UsuarioStore.SEED_ADMIN_ID).pessoa().nome());
+
         var idempotency = new PersistentIdempotencyStore("memory", null);
         var record = idempotency.createProcessing(
                 "scope",
@@ -34,6 +39,13 @@ class PersistenceAdapterSelectionTest {
         assertEquals(
                 "oficina.persistence.kind deve ser postgresql ou memory: arquivo",
                 atendimentoFailure.getMessage());
+
+        var usuarioFailure = assertThrows(
+                IllegalArgumentException.class,
+                () -> new UsuarioStore(null, "arquivo"));
+        assertEquals(
+                "oficina.persistence.kind deve ser postgresql ou memory: arquivo",
+                usuarioFailure.getMessage());
 
         var idempotencyFailure = assertThrows(
                 IllegalArgumentException.class,

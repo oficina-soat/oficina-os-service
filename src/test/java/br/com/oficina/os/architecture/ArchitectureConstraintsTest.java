@@ -221,8 +221,9 @@ class ArchitectureConstraintsTest {
 
         var violations = new ArrayList<String>();
         for (SourceFile source : adapterSources) {
-            if (!source.content().contains(" implements AtendimentoGateway")) {
-                violations.add(source.relativePath() + " deve implementar AtendimentoGateway do core");
+            if (!source.content().contains(" implements AtendimentoGateway")
+                    && !source.content().contains(" implements UsuarioGateway")) {
+                violations.add(source.relativePath() + " deve implementar um gateway do core");
             }
             if (source.content().contains("@ApplicationScoped")) {
                 continue;

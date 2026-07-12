@@ -2,11 +2,19 @@ package br.com.oficina.os.framework.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
+import br.com.oficina.os.core.entities.pessoa.Pessoa;
+import br.com.oficina.os.core.entities.usuario.CpfOperacional;
+import br.com.oficina.os.core.entities.usuario.TipoDePapel;
+import br.com.oficina.os.core.entities.usuario.Usuario;
+import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
+import br.com.oficina.os.core.exceptions.UsuarioConflitanteException;
+import br.com.oficina.os.core.exceptions.UsuarioNaoEncontradoException;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.framework.idempotency.IdempotencyRecord.ProcessingStatus;
 import br.com.oficina.os.framework.idempotency.PersistentIdempotencyStore;
@@ -19,7 +27,9 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.NotFoundException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -31,6 +41,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class PostgresAtendimentoSeedStoreTest {
     @Inject
     AtendimentoSeedStore store;
+
+    @Inject
+    UsuarioStore usuarioStore;
 
     @Inject
     DataSource dataSource;
@@ -109,6 +122,91 @@ class PostgresAtendimentoSeedStoreTest {
         assertEquals("{\"clienteId\":\"cliente-postgres-001\"}", reloaded.responseBody());
         assertEquals("correlation-postgres-001", reloaded.correlationId());
         assertEquals("request-postgres-001", reloaded.requestId());
+    }
+
+    @Test
+    void devePersistirCrudDeUsuariosSemCredenciaisNoPostgreSQL() throws Exception {
+        var pessoaSolicitadaId = UUID.randomUUID();
+        var usuario = new Usuario(
+                UUID.randomUUID(),
+                new Pessoa(pessoaSolicitadaId, new CpfOperacional("50132372037"), "Cliente e Operador"),
+                UsuarioStatus.ATIVO,
+                Set.of(TipoDePapel.MECANICO, TipoDePapel.RECEPCIONISTA));
+
+        var criado = usuarioStore.criar(usuario);
+        var pessoaSeedCliente = UUID.fromString("10000000-0000-4000-8000-000000000004");
+
+        assertNotEquals(pessoaSolicitadaId, criado.pessoa().id());
+        assertEquals(pessoaSeedCliente, criado.pessoa().id());
+        assertEquals("Cliente e Operador", criado.pessoa().nome());
+        assertTrue(usuarioStore.listar().stream().anyMatch(candidate -> candidate.id().equals(criado.id())));
+        assertEquals(criado.id(), new UsuarioStore(dataSource, "postgresql").buscar(criado.id()).id());
+
+        var atualizado = usuarioStore.atualizar(criado.atualizado(
+                new Pessoa(criado.pessoa().id(), new CpfOperacional("52998224725"), "Operador Atualizado"),
+                UsuarioStatus.BLOQUEADO,
+                Set.of(TipoDePapel.ADMINISTRATIVO)));
+        assertEquals("52998224725", atualizado.pessoa().documento().valor());
+        assertEquals(UsuarioStatus.BLOQUEADO, atualizado.status());
+        assertEquals(Set.of(TipoDePapel.ADMINISTRATIVO), atualizado.papeis());
+
+        var novaPessoaId = UUID.randomUUID();
+        var segundoUsuario = usuarioStore.criar(new Usuario(
+                UUID.randomUUID(),
+                new Pessoa(novaPessoaId, new CpfOperacional("11144477735"), "Novo Operador"),
+                UsuarioStatus.ATIVO,
+                Set.of(TipoDePapel.RECEPCIONISTA)));
+        assertEquals(novaPessoaId, segundoUsuario.pessoa().id());
+
+        usuarioStore.inativar(criado.id());
+        usuarioStore.inativar(criado.id());
+        assertEquals(UsuarioStatus.INATIVO, usuarioStore.buscar(criado.id()).status());
+
+        var eventosDoUsuario = store.listarOutbox().stream()
+                .filter(event -> event.aggregateId().equals(criado.id()))
+                .toList();
+        assertEquals(3, eventosDoUsuario.size());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioAdicionado")).count());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioAtualizado")).count());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioExcluido")).count());
+        assertTrue(eventosDoUsuario.stream().allMatch(event -> event.producer().equals("oficina-os-service")));
+        assertTrue(eventosDoUsuario.stream().allMatch(event -> event.payload().get("usuarioId").equals(criado.id().toString())));
+        assertTrue(eventosDoUsuario.stream().noneMatch(event -> event.payload().containsKey("password")));
+        var exclusao = eventosDoUsuario.stream()
+                .filter(event -> event.eventType().equals("usuarioExcluido"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("oficina.os.usuario-excluido", exclusao.topic());
+        assertEquals("INATIVO", exclusao.payload().get("status"));
+        assertEquals("52998224725", exclusao.payload().get("documento"));
+        assertEquals(List.of("administrativo"), exclusao.payload().get("papeis"));
+
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(new Usuario(
+                UUID.randomUUID(),
+                new Pessoa(UUID.randomUUID(), new CpfOperacional("84191404067"), "Administrador Duplicado"),
+                UsuarioStatus.ATIVO,
+                Set.of(TipoDePapel.ADMINISTRATIVO))));
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(new Usuario(
+                UsuarioStore.SEED_ADMIN_ID,
+                new Pessoa(UUID.randomUUID(), new CpfOperacional("12345678901"), "ID Duplicado"),
+                UsuarioStatus.ATIVO,
+                Set.of(TipoDePapel.ADMINISTRATIVO))));
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.atualizar(atualizado.atualizado(
+                new Pessoa(atualizado.pessoa().id(), new CpfOperacional("36655462007"), "CPF Conflitante"),
+                UsuarioStatus.ATIVO,
+                Set.of(TipoDePapel.MECANICO))));
+        assertThrows(UsuarioNaoEncontradoException.class, () -> usuarioStore.buscar(UUID.randomUUID()));
+
+        try (var connection = dataSource.getConnection();
+                var statement = connection.prepareStatement("""
+                        SELECT count(*)
+                        FROM information_schema.columns
+                        WHERE table_name = 'usuario' AND column_name = 'password_hash'
+                        """);
+                var resultSet = statement.executeQuery()) {
+            assertTrue(resultSet.next());
+            assertEquals(0, resultSet.getInt(1));
+        }
     }
 
     @Test

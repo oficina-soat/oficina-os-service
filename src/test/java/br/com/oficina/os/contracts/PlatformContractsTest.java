@@ -93,7 +93,7 @@ class PlatformContractsTest {
         for (EstadoSaga estado : EstadoSaga.values()) {
             assertTrue(sagaContract.contains(estado.name()), () -> "Estado de Saga ausente do contrato: " + estado);
         }
-        producedEvents().keySet().forEach(eventType ->
+        sagaProducedEvents().forEach(eventType ->
                 assertTrue(sagaContract.contains(eventType), () -> "Evento produzido ausente do contrato da Saga: " + eventType));
         consumedEvents().keySet().forEach(eventType ->
                 assertTrue(sagaContract.contains(eventType), () -> "Evento consumido ausente do contrato da Saga: " + eventType));
@@ -104,8 +104,20 @@ class PlatformContractsTest {
                 "ordemDeServicoCriada", "oficina.os.ordem-de-servico-criada",
                 "ordemDeServicoFinalizada", "oficina.os.ordem-de-servico-finalizada",
                 "ordemDeServicoEntregue", "oficina.os.ordem-de-servico-entregue",
+                "usuarioAdicionado", "oficina.os.usuario-adicionado",
+                "usuarioAtualizado", "oficina.os.usuario-atualizado",
+                "usuarioExcluido", "oficina.os.usuario-excluido",
                 "sagaCompensada", "oficina.saga.saga-compensada",
                 "sagaFinalizadaComSucesso", "oficina.saga.saga-finalizada-com-sucesso");
+    }
+
+    private static Set<String> sagaProducedEvents() {
+        return Set.of(
+                "ordemDeServicoCriada",
+                "ordemDeServicoFinalizada",
+                "ordemDeServicoEntregue",
+                "sagaCompensada",
+                "sagaFinalizadaComSucesso");
     }
 
     private static Map<String, String> consumedEvents() {

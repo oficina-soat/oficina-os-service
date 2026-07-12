@@ -2,7 +2,8 @@ package br.com.oficina.os.core.entities.usuario;
 
 public enum UsuarioStatus {
     ATIVO,
-    INATIVO;
+    INATIVO,
+    BLOQUEADO;
 
     public static UsuarioStatus from(String status) {
         if (status == null || status.isBlank()) {
