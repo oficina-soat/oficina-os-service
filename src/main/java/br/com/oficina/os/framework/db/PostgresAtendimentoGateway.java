@@ -1024,28 +1024,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 null,
                 0,
                 null);
-        try (var statement = connection.prepareStatement("""
-                INSERT INTO outbox_event (
-                    id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                    correlation_id, occurred_at, created_at, published_at, attempts, next_attempt_at, last_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, NULL, ?)
-                """)) {
-            statement.setObject(1, event.eventId());
-            statement.setString(2, event.aggregateId().toString());
-            statement.setString(3, event.eventType());
-            statement.setInt(4, event.eventVersion());
-            statement.setString(5, event.topic());
-            statement.setString(6, event.producer());
-            statement.setString(7, toJson(event.payload()));
-            statement.setString(8, event.status());
-            statement.setString(9, event.correlationId());
-            statement.setObject(10, event.occurredAt());
-            statement.setObject(11, event.createdAt());
-            statement.setObject(12, event.publishedAt());
-            statement.setInt(13, event.attempts());
-            statement.setString(14, event.lastError());
-            statement.executeUpdate();
-        }
+        PostgresPersistenceSupport.insertOutbox(connection, event);
         logEvent(LOG, "outbox event registered", event, STATUS_PENDING);
     }
 
@@ -1357,39 +1336,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         return new IllegalStateException("Falha ao acessar PostgreSQL do oficina-os-service.", exception);
     }
 
-    private <T> T inTransaction(SqlOperation<T> operation) {
+    private <T> T inTransaction(PostgresPersistenceSupport.SqlOperation<T> operation) {
         try (var connection = dataSource.getConnection()) {
-            return executeInTransaction(connection, operation);
+            return PostgresPersistenceSupport.executeTransaction(connection, operation);
         } catch (SQLException exception) {
             throw persistenceFailure(exception);
         }
-    }
-
-    private <T> T executeInTransaction(Connection connection, SqlOperation<T> operation) throws SQLException {
-        var previousAutoCommit = connection.getAutoCommit();
-        connection.setAutoCommit(false);
-        try {
-            var result = operation.execute(connection);
-            connection.commit();
-            return result;
-        } catch (SQLException | RuntimeException exception) {
-            rollback(connection);
-            throw exception;
-        } finally {
-            connection.setAutoCommit(previousAutoCommit);
-        }
-    }
-
-    private void rollback(Connection connection) {
-        try {
-            connection.rollback();
-        } catch (SQLException _) {
-            // The original persistence failure is more useful to callers.
-        }
-    }
-
-    @FunctionalInterface
-    private interface SqlOperation<T> {
-        T execute(Connection connection) throws SQLException;
     }
 }

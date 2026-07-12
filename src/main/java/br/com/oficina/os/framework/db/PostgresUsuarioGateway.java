@@ -13,8 +13,6 @@ import br.com.oficina.os.core.exceptions.UsuarioConflitanteException;
 import br.com.oficina.os.core.exceptions.UsuarioNaoEncontradoException;
 import br.com.oficina.os.core.interfaces.gateway.UsuarioGateway;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,7 +30,6 @@ import org.jboss.logging.Logger;
 
 class PostgresUsuarioGateway implements UsuarioGateway {
     private static final Logger LOG = Logger.getLogger(PostgresUsuarioGateway.class);
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final String PRODUCER = "oficina-os-service";
     private static final String STATUS_PENDING = "PENDING";
     private static final String EVENT_USUARIO_ADICIONADO = "usuarioAdicionado";
@@ -196,26 +193,7 @@ class PostgresUsuarioGateway implements UsuarioGateway {
                 null,
                 0,
                 null);
-        try (var statement = connection.prepareStatement("""
-                INSERT INTO outbox_event (
-                    id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                    correlation_id, occurred_at, created_at, published_at, attempts, next_attempt_at, last_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, NULL, ?, NULL, NULL)
-                """)) {
-            statement.setObject(1, event.eventId());
-            statement.setString(2, event.aggregateId().toString());
-            statement.setString(3, event.eventType());
-            statement.setInt(4, event.eventVersion());
-            statement.setString(5, event.topic());
-            statement.setString(6, event.producer());
-            statement.setString(7, toJson(event.payload()));
-            statement.setString(8, event.status());
-            statement.setString(9, event.correlationId());
-            statement.setObject(10, event.occurredAt());
-            statement.setObject(11, event.createdAt());
-            statement.setInt(12, event.attempts());
-            statement.executeUpdate();
-        }
+        PostgresPersistenceSupport.insertOutbox(connection, event);
         logEvent(LOG, "user domain event registered", event, STATUS_PENDING);
     }
 
@@ -228,14 +206,6 @@ class PostgresUsuarioGateway implements UsuarioGateway {
                 "status", usuario.status().name(),
                 "papeis", usuario.papeis().stream().map(TipoDePapel::valor).sorted().toList(),
                 "atualizadoEm", usuario.atualizadoEm().toString());
-    }
-
-    private String toJson(Map<String, Object> payload) throws SQLException {
-        try {
-            return JSON.writeValueAsString(payload);
-        } catch (JsonProcessingException exception) {
-            throw new SQLException("Payload do evento de usuário é inválido.", exception);
-        }
     }
 
     private Pessoa persistirOuReutilizarPessoa(
@@ -390,35 +360,11 @@ class PostgresUsuarioGateway implements UsuarioGateway {
         return new IllegalStateException("Falha ao acessar usuários no PostgreSQL do oficina-os-service.", exception);
     }
 
-    private <T> T inTransaction(SqlOperation<T> operation) {
+    private <T> T inTransaction(PostgresPersistenceSupport.SqlOperation<T> operation) {
         try (var connection = dataSource.getConnection()) {
-            var previousAutoCommit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            try {
-                var result = operation.execute(connection);
-                connection.commit();
-                return result;
-            } catch (SQLException | RuntimeException exception) {
-                rollback(connection);
-                throw exception;
-            } finally {
-                connection.setAutoCommit(previousAutoCommit);
-            }
+            return PostgresPersistenceSupport.executeTransaction(connection, operation);
         } catch (SQLException exception) {
             throw persistenceFailure(exception);
         }
-    }
-
-    private void rollback(Connection connection) {
-        try {
-            connection.rollback();
-        } catch (SQLException _) {
-            // A falha original é mais útil para o chamador.
-        }
-    }
-
-    @FunctionalInterface
-    private interface SqlOperation<T> {
-        T execute(Connection connection) throws SQLException;
     }
 }
