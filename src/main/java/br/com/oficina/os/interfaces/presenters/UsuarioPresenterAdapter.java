@@ -1,5 +1,6 @@
 package br.com.oficina.os.interfaces.presenters;
 
+import br.com.oficina.os.core.entities.usuario.TipoDePapel;
 import br.com.oficina.os.core.entities.usuario.Usuario;
 import br.com.oficina.os.interfaces.presenters.view_model.UsuarioViewModel;
 import java.util.Comparator;
@@ -14,7 +15,7 @@ public class UsuarioPresenterAdapter {
                 usuario.pessoa().tipoPessoa(),
                 usuario.status(),
                 usuario.papeis().stream()
-                        .map(papel -> papel.valor())
+                        .map(TipoDePapel::valor)
                         .sorted(Comparator.naturalOrder())
                         .toList(),
                 usuario.criadoEm(),

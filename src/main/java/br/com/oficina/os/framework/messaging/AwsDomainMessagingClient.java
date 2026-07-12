@@ -47,17 +47,17 @@ public class AwsDomainMessagingClient {
             @ConfigProperty(name = "oficina.messaging.aws-access-key-id") Optional<String> accessKeyId,
             @ConfigProperty(name = "oficina.messaging.aws-secret-access-key") Optional<String> secretAccessKey,
             @ConfigProperty(name = "oficina.messaging.aws-session-token") Optional<String> sessionToken) {
-        var endpointOverride = configuredEndpointOverride.orElse("");
+        var resolvedEndpointOverride = configuredEndpointOverride.orElse("");
         this.region = region;
-        this.endpointOverride = endpointOverride;
+        this.endpointOverride = resolvedEndpointOverride;
         this.configuredAccountId = configuredAccountId.orElse("");
         var credentialsProvider = credentialsProvider(
                 accessKeyId.orElse(""),
                 secretAccessKey.orElse(""),
                 sessionToken.orElse(""),
-                endpointOverride);
-        this.snsClient = snsClient(region, endpointOverride, credentialsProvider);
-        this.sqsClient = sqsClient(region, endpointOverride, credentialsProvider);
+                resolvedEndpointOverride);
+        this.snsClient = snsClient(region, resolvedEndpointOverride, credentialsProvider);
+        this.sqsClient = sqsClient(region, resolvedEndpointOverride, credentialsProvider);
         this.stsClient = stsClient(region, credentialsProvider);
         if (!DomainMessagingRoutes.SERVICE_NAME.equals(applicationName)) {
             throw new IllegalStateException("Servico de mensageria configurado com nome invalido: " + applicationName);

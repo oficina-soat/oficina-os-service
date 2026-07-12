@@ -27,6 +27,7 @@ class PessoaTest {
         assertEquals(TipoPessoa.JURIDICA, pessoa.tipoPessoa());
         assertEquals("Oficina Central", pessoa.nome());
 
-        assertThrows(IllegalArgumentException.class, () -> pessoa.alteraNomePara("x".repeat(256)));
+        var nomeMuitoLongo = "x".repeat(256);
+        assertThrows(IllegalArgumentException.class, () -> pessoa.alteraNomePara(nomeMuitoLongo));
     }
 }

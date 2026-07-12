@@ -40,23 +40,25 @@ class InMemoryUsuarioGatewayTest {
     void deveRejeitarDuplicidadeEIdsInexistentes() {
         var gateway = new InMemoryUsuarioGateway();
 
-        assertThrows(UsuarioConflitanteException.class, () -> gateway.criar(
-                usuario("84191404067", "Administrador Duplicado", UsuarioStatus.ATIVO)));
+        var administradorDuplicado = usuario("84191404067", "Administrador Duplicado", UsuarioStatus.ATIVO);
+        assertThrows(UsuarioConflitanteException.class, () -> gateway.criar(administradorDuplicado));
         var usuarioComIdDuplicado = new Usuario(
                 UsuarioStore.SEED_ADMIN_ID,
                 new Pessoa(UUID.randomUUID(), new CpfOperacional("52998224725"), "ID Duplicado"),
                 UsuarioStatus.ATIVO,
                 Set.of(TipoDePapel.MECANICO));
         assertThrows(UsuarioConflitanteException.class, () -> gateway.criar(usuarioComIdDuplicado));
-        assertThrows(UsuarioNaoEncontradoException.class, () -> gateway.buscar(UUID.randomUUID()));
-        assertThrows(UsuarioNaoEncontradoException.class, () -> gateway.atualizar(
-                usuario("52998224725", "Inexistente", UsuarioStatus.ATIVO)));
+        var usuarioInexistenteId = UUID.randomUUID();
+        assertThrows(UsuarioNaoEncontradoException.class, () -> gateway.buscar(usuarioInexistenteId));
+        var usuarioInexistente = usuario("52998224725", "Inexistente", UsuarioStatus.ATIVO);
+        assertThrows(UsuarioNaoEncontradoException.class, () -> gateway.atualizar(usuarioInexistente));
 
         var criado = gateway.criar(usuario("52998224725", "Primeiro", UsuarioStatus.ATIVO));
-        assertThrows(UsuarioConflitanteException.class, () -> gateway.atualizar(criado.atualizado(
+        var usuarioConflitante = criado.atualizado(
                 new Pessoa(criado.pessoa().id(), new CpfOperacional("36655462007"), "Conflitante"),
                 UsuarioStatus.ATIVO,
-                Set.of(TipoDePapel.MECANICO))));
+                Set.of(TipoDePapel.MECANICO));
+        assertThrows(UsuarioConflitanteException.class, () -> gateway.atualizar(usuarioConflitante));
     }
 
     private static Usuario usuario(String documento, String nome, UsuarioStatus status) {

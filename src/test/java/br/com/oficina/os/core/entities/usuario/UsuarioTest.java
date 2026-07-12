@@ -61,14 +61,17 @@ class UsuarioTest {
         assertEquals(Set.of(TipoDePapel.ADMINISTRATIVO, TipoDePapel.RECEPCIONISTA), atualizado.papeis());
         assertEquals(atualizadoEm, atualizado.atualizadoEm());
 
+        var usuarioId = UUID.randomUUID();
+        var papeis = Set.of(TipoDePapel.MECANICO);
+        var semPapeis = Set.<TipoDePapel>of();
         assertThrows(NullPointerException.class, () ->
-                new Usuario(null, pessoa, UsuarioStatus.ATIVO, Set.of(TipoDePapel.MECANICO)));
+                new Usuario(null, pessoa, UsuarioStatus.ATIVO, papeis));
         assertThrows(NullPointerException.class, () ->
-                new Usuario(UUID.randomUUID(), null, UsuarioStatus.ATIVO, Set.of(TipoDePapel.MECANICO)));
+                new Usuario(usuarioId, null, UsuarioStatus.ATIVO, papeis));
         assertThrows(NullPointerException.class, () ->
-                new Usuario(UUID.randomUUID(), pessoa, null, Set.of(TipoDePapel.MECANICO)));
+                new Usuario(usuarioId, pessoa, null, papeis));
         assertThrows(IllegalArgumentException.class, () ->
-                new Usuario(UUID.randomUUID(), pessoa, UsuarioStatus.ATIVO, Set.of()));
+                new Usuario(usuarioId, pessoa, UsuarioStatus.ATIVO, semPapeis));
     }
 
     @Test
