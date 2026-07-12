@@ -28,9 +28,10 @@ class InMemoryAtendimentoGatewayTest {
     @Test
     void deveGerenciarCadastroOrdemOutboxEPublicacao() {
         var gateway = new InMemoryAtendimentoGateway();
+        var clienteInexistenteId = UUID.randomUUID();
 
         assertFalse(gateway.listarClientes().isEmpty());
-        assertThrows(NotFoundException.class, () -> gateway.buscarCliente(UUID.randomUUID()));
+        assertThrows(NotFoundException.class, () -> gateway.buscarCliente(clienteInexistenteId));
 
         var cliente = gateway.criarCliente("  Ana Souza  ", "84191404067", "  ", "ana@example.com");
         assertEquals("Ana Souza", cliente.nome());
@@ -52,16 +53,18 @@ class InMemoryAtendimentoGatewayTest {
         var veiculoAtualizado = gateway.atualizarVeiculo(veiculo.veiculoId(), "def2g34", "Toyota", "Corolla", 2024);
         assertEquals("DEF2G34", veiculoAtualizado.placa());
 
+        var clienteId = cliente.clienteId();
+        var veiculoId = veiculo.veiculoId();
         assertThrows(WebApplicationException.class, () -> gateway.criarOrdemServico(
                 AtendimentoGateway.SEED_CLIENTE_ID,
-                veiculo.veiculoId(),
+                veiculoId,
                 "Nao liga"));
         assertThrows(IllegalArgumentException.class, () -> gateway.criarOrdemServico(
-                cliente.clienteId(),
-                veiculo.veiculoId(),
+                clienteId,
+                veiculoId,
                 "  "));
 
-        var ordem = gateway.criarOrdemServico(cliente.clienteId(), veiculo.veiculoId(), " Barulho no motor ");
+        var ordem = gateway.criarOrdemServico(clienteId, veiculoId, " Barulho no motor ");
         assertEquals(TipoDeEstadoDaOrdemDeServico.RECEBIDA, ordem.estado());
         assertEquals(1, gateway.historico(ordem.ordemServicoId()).size());
         assertTrue(gateway.listarOrdensServico(TipoDeEstadoDaOrdemDeServico.RECEBIDA).contains(ordem));
@@ -81,7 +84,8 @@ class InMemoryAtendimentoGatewayTest {
         var falhaFinal = gateway.marcarFalhaPublicacao(publicado.eventId(), "erro definitivo", tentativa, true);
         assertEquals("FAILED", falhaFinal.status());
 
-        assertThrows(IllegalStateException.class, () -> gateway.marcarEventoPublicado(UUID.randomUUID()));
+        var eventoInexistenteId = UUID.randomUUID();
+        assertThrows(IllegalStateException.class, () -> gateway.marcarEventoPublicado(eventoInexistenteId));
     }
 
     @Test
