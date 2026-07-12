@@ -75,6 +75,61 @@ class AtendimentoResourceTest {
     }
 
     @Test
+    void deveRepetirRespostaIdempotenteERejeitarPayloadDivergente() {
+        var idempotencyKey = "cliente-replay-" + UUID.randomUUID();
+        var requestBody = """
+                {
+                  "nome": "Cliente Idempotente",
+                  "documento": "84191404067",
+                  "telefone": "+5511666666666",
+                  "email": "idempotente@example.com"
+                }
+                """;
+
+        var clienteId = given()
+                .header("X-Idempotency-Key", idempotencyKey)
+                .contentType("application/json")
+                .body(requestBody)
+                .when()
+                .post("/api/v1/clientes")
+                .then()
+                .statusCode(201)
+                .body("clienteId", notNullValue())
+                .extract()
+                .path("clienteId")
+                .toString();
+
+        given()
+                .header("X-Idempotency-Key", idempotencyKey)
+                .contentType("application/json")
+                .body(requestBody)
+                .when()
+                .post("/api/v1/clientes")
+                .then()
+                .statusCode(201)
+                .body("clienteId", equalTo(clienteId))
+                .body("nome", equalTo("Cliente Idempotente"));
+
+        given()
+                .header("X-Idempotency-Key", idempotencyKey)
+                .contentType("application/json")
+                .body("""
+                        {
+                          "nome": "Cliente Idempotente Divergente",
+                          "documento": "84191404067",
+                          "telefone": "+5511666666666",
+                          "email": "idempotente@example.com"
+                        }
+                        """)
+                .when()
+                .post("/api/v1/clientes")
+                .then()
+                .statusCode(409)
+                .body("code", equalTo("IDEMPOTENCY_CONFLICT"))
+                .body("message", equalTo("Chave de idempotencia reutilizada com payload divergente."));
+    }
+
+    @Test
     void deveAtualizarClienteEConsultarPaginado() {
         given()
                 .contentType("application/json")

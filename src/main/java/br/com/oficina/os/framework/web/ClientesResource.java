@@ -5,6 +5,7 @@ import br.com.oficina.os.interfaces.controllers.VeiculosController;
 import br.com.oficina.os.interfaces.presenters.view_model.ClienteViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.PageResponse;
 import br.com.oficina.os.interfaces.presenters.view_model.VeiculoViewModel;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
@@ -28,6 +29,7 @@ import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @PermitAll
+@Blocking
 public class ClientesResource {
     private final ClientesController clientesController;
 

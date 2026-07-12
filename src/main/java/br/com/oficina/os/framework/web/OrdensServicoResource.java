@@ -6,6 +6,7 @@ import br.com.oficina.os.interfaces.presenters.view_model.HistoricoOrdemServicoV
 import br.com.oficina.os.interfaces.presenters.view_model.OperacaoAssincronaViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.OrdemServicoViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.PageResponse;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
@@ -29,6 +30,7 @@ import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @PermitAll
+@Blocking
 public class OrdensServicoResource {
     private final OrdensServicoController ordensServicoController;
 
