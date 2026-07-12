@@ -2,7 +2,6 @@ package br.com.oficina.os.framework.messaging;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import java.net.URI;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.testcontainers.containers.GenericContainer;
