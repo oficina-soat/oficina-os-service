@@ -7,6 +7,7 @@ Este repositório segue a governança definida em [../oficina-platform](../ofici
 ## Responsabilidades
 
 - manter cadastros operacionais de Pessoa, Usuário, Cliente e Veículo;
+- expor o CRUD de usuários operacionais somente para o papel `administrativo`, com estados `ATIVO`, `INATIVO` e `BLOQUEADO`;
 - abrir, consultar, atualizar estado, cancelar, finalizar e entregar Ordens de Serviço;
 - manter snapshots de itens de peça e serviço vinculados à OS;
 - registrar histórico de estados da OS;
@@ -14,6 +15,8 @@ Este repositório segue a governança definida em [../oficina-platform](../ofici
 - produzir e consumir eventos de domínio ligados à OS e à Saga.
 
 O serviço não é dono de catálogo técnico, estoque, orçamento ou pagamento.
+
+Credenciais, login e emissão de JWT também não pertencem a este serviço. Essas responsabilidades permanecem no `oficina-auth-lambda`; o OS mantém apenas Pessoa, status e papéis operacionais.
 
 ## Saga orquestrada
 
@@ -35,7 +38,7 @@ Os serviços participantes preservam seus próprios bancos e regras de domínio.
 
 O serviço segue Clean Architecture com `core/entities`, portas em `core/interfaces`, casos de uso em `core/usecases`, entrada REST em `interfaces/controllers` e adapters em `framework/`. O `core/` não deve importar CDI, JAX-RS, Quarkus, JDBC ou classes de `framework/` e `interfaces/`.
 
-Os casos de uso são classes Java puras instanciadas por [AtendimentoConfiguration](src/main/java/br/com/oficina/os/framework/web/AtendimentoConfiguration.java). Resources e presenters chamam casos de uso e tipos do core; persistência e mensageria ficam atrás da porta [AtendimentoGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/AtendimentoGateway.java). A regra é validada por [CleanArchitectureBoundaryTest](src/test/java/br/com/oficina/os/architecture/CleanArchitectureBoundaryTest.java).
+Os casos de uso são classes Java puras instanciadas por [AtendimentoConfiguration](src/main/java/br/com/oficina/os/framework/web/AtendimentoConfiguration.java) e [UsuariosConfiguration](src/main/java/br/com/oficina/os/framework/web/UsuariosConfiguration.java). Resources e presenters chamam casos de uso e tipos do core; persistência e mensageria ficam atrás das portas [AtendimentoGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/AtendimentoGateway.java) e [UsuarioGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/UsuarioGateway.java). A regra é validada por [CleanArchitectureBoundaryTest](src/test/java/br/com/oficina/os/architecture/CleanArchitectureBoundaryTest.java).
 
 ## Setup local
 
@@ -86,9 +89,23 @@ Esse modo mantém dados apenas durante o processo e não deve ser usado em image
 
 ## Persistência
 
-Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=postgresql`) no database `oficina_os`, com migrations Flyway. Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox usam adapters JDBC e devem sobreviver a restart do processo ou pod quando conectados ao banco do ambiente.
+Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=postgresql`) no database `oficina_os`, com migrations Flyway. Pessoa, Usuário, papéis, Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox usam adapters JDBC e devem sobreviver a restart do processo ou pod quando conectados ao banco do ambiente.
 
-O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`), execução local deliberada com profile `dev` e fixtures explícitas. Os seletores dos adapters aceitam somente `postgresql` ou `memory`; valores desconhecidos interrompem a inicialização. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers e aplica as migrations do serviço.
+A migration `V5__remove_usuario_password_hash.sql` remove a coluna histórica `usuario.password_hash`. O database `oficina_os` não armazena credenciais; a integração futura com o store do `oficina-auth-lambda` deve usar provisionamento ou sincronização explícita definida pela plataforma.
+
+O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`), execução local deliberada com profile `dev` e fixtures explícitas. Os seletores dos adapters aceitam somente `postgresql` ou `memory`; valores desconhecidos interrompem a inicialização. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers, aplica as migrations do serviço e exercita o CRUD persistente de usuários.
+
+## Usuários operacionais
+
+As rotas abaixo exigem JWT com o papel `administrativo`:
+
+- `POST /api/v1/usuarios`: cria Pessoa e Usuário; requer `X-Idempotency-Key`;
+- `GET /api/v1/usuarios`: lista usuários com paginação;
+- `GET /api/v1/usuarios/{usuarioId}`: consulta o agregado;
+- `PUT /api/v1/usuarios/{usuarioId}`: substitui nome, CPF, status e papéis;
+- `DELETE /api/v1/usuarios/{usuarioId}`: realiza exclusão lógica, alterando o status para `INATIVO`.
+
+O payload não aceita senha. Os papéis canônicos são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
 
 ## Fail-fast de runtime
 
@@ -134,7 +151,7 @@ Evidência local de execução compatível com CI em 2026-07-12:
 ./mvnw -B clean verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
 2 scenarios (2 passed)
 15 steps (15 passed)
-Tests run: 162, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 173, Failures: 0, Errors: 0, Skipped: 0
 All coverage checks have been met.
 BUILD SUCCESS
 ```
@@ -146,7 +163,7 @@ O JaCoCo é executado no `verify`, gera relatório em `target/jacoco-report/` e 
 Evidência local de cobertura em 2026-07-12:
 
 ```text
-instruction=94.61% branch=77.90% line=94.10% complexity=83.39%
+instruction=94.77% branch=76.88% line=94.19% complexity=83.30%
 ```
 
 ## CI/CD
@@ -247,4 +264,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, a idempotência persistente e a mensageria SNS/SQS local foram implementadas; as próximas pendências ficam no roadmap da plataforma, principalmente proteção contra fallback silencioso e evidência remota no ambiente `lab`.
+O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, o CRUD administrativo de usuários, a idempotência persistente, a mensageria SNS/SQS e o fail-fast de runtime foram implementados. A próxima integração funcional está no roadmap da plataforma: provisionar ou sincronizar usuários operacionais com o store do `oficina-auth-lambda`, além das evidências remotas no ambiente `lab`.

@@ -20,6 +20,7 @@
 - [x] Validar contratos OpenAPI, schemas JSON de eventos, erro padronizado, idempotência e Saga.
 - [x] Copiar e adaptar workflows de CI/CD, garantindo build, testes, Quality Gate, publicação de imagem e deploy automatizado condicionado por variáveis de ambiente.
 - [x] Impedir fallback silencioso para memória em `prod`/`lab` e validar PostgreSQL, SNS/SQS e configurações obrigatórias no startup, mantendo memória somente em teste ou execução local deliberada.
+- [x] Implementar o CRUD REST administrativo de Pessoa e Usuário em `/api/v1/usuarios`, com status, papéis, autorização, persistência PostgreSQL e exclusão lógica, sem credenciais no OS.
 
 ## Eventos Produzidos
 

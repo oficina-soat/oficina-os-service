@@ -58,6 +58,12 @@ public class WebApplicationExceptionMapper implements ExceptionMapper<WebApplica
     }
 
     private String code(int status, WebApplicationException exception) {
+        if (status == Response.Status.UNAUTHORIZED.getStatusCode()) {
+            return "AUTHENTICATION_REQUIRED";
+        }
+        if (status == Response.Status.FORBIDDEN.getStatusCode()) {
+            return "ACCESS_DENIED";
+        }
         if (status == Response.Status.NOT_FOUND.getStatusCode()) {
             return "RESOURCE_NOT_FOUND";
         }
