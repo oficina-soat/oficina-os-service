@@ -44,14 +44,6 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             FROM outbox_event
             ORDER BY created_at
             """;
-    private static final String SQL_SELECT_OUTBOX_BY_STATUS_FOR_UPDATE = """
-            SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
-                   correlation_id, occurred_at, created_at, published_at, attempts, last_error
-            FROM outbox_event
-            WHERE status = ?
-            ORDER BY created_at
-            FOR UPDATE
-            """;
     private static final String SQL_SELECT_PENDING_OUTBOX_FOR_PUBLICATION = """
             SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
                    correlation_id, occurred_at, created_at, published_at, attempts, last_error
