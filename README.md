@@ -73,11 +73,35 @@ cd ../oficina-os-service
 
 O comando `verify` executa testes unitários, integração, contrato, BDD e verificação de cobertura JaCoCo.
 
+Para uma execução local deliberada sem PostgreSQL, use exclusivamente o profile Quarkus `dev` e desative os componentes de banco que não serão usados:
+
+```bash
+./mvnw quarkus:dev -Ppostgresql \
+  -Doficina.persistence.kind=memory \
+  -Dquarkus.datasource.active=false \
+  -Dquarkus.flyway.active=false
+```
+
+Esse modo mantém dados apenas durante o processo e não deve ser usado em imagem, release ou deploy.
+
 ## Persistência
 
 Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=postgresql`) no database `oficina_os`, com migrations Flyway. Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox usam adapters JDBC e devem sobreviver a restart do processo ou pod quando conectados ao banco do ambiente.
 
-O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`) e fixtures explícitas. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers e aplica as migrations do serviço.
+O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`), execução local deliberada com profile `dev` e fixtures explícitas. Os seletores dos adapters aceitam somente `postgresql` ou `memory`; valores desconhecidos interrompem a inicialização. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers e aplica as migrations do serviço.
+
+## Fail-fast de runtime
+
+O runtime é protegido quando o profile Quarkus ativo contém `prod` ou `lab`, ou quando `DEPLOYMENT_ENVIRONMENT=lab`. Nesses casos, [RuntimeStartupValidator](src/main/java/br/com/oficina/os/framework/web/RuntimeStartupValidator.java) interrompe o startup se houver fallback para memória, mensageria desabilitada, endpoint AWS local, audience divergente ou configuração obrigatória ausente.
+
+Configurações obrigatórias em `prod`/`lab`:
+
+- `DB_USERNAME`, `DB_PASSWORD`, `JDBC_DATABASE_URL` e `REACTIVE_DATABASE_URL`;
+- `AWS_REGION`;
+- `OFICINA_AUTH_ISSUER`, `OFICINA_AUTH_AUDIENCE=oficina-os-service` e `MP_JWT_VERIFY_PUBLICKEY_LOCATION`;
+- `OFICINA_MESSAGING_ENABLED=true`, com publisher, consumer e worker também habilitados.
+
+No startup protegido, o serviço abre e valida uma conexão PostgreSQL, consulta os atributos de todos os tópicos SNS produzidos e resolve todas as filas SQS consumidas. A identidade AWS pode vir da cadeia padrão ou de IRSA. Credenciais explícitas continuam opcionais: `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` devem ser informadas juntas; quando `AWS_SESSION_TOKEN` também estiver presente, o serviço usa credenciais temporárias e rejeita qualquer trio incompleto. A policy de runtime precisa permitir `sns:GetTopicAttributes` nos tópicos produzidos, além de `sns:Publish` e das ações SQS já exigidas pelo consumo.
 
 ## Mensageria SNS/SQS
 
@@ -104,32 +128,32 @@ O runner Cucumber participa do ciclo Maven padrão. Assim, o comando usado pelo 
 ./mvnw -B verify -P"${MAVEN_PROFILE}" -DskipITs=false -DfailIfNoTests=false
 ```
 
-Evidência local de execução compatível com CI em 2026-07-11:
+Evidência local de execução compatível com CI em 2026-07-12:
 
 ```text
-./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
+./mvnw -B clean verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false
 2 scenarios (2 passed)
 15 steps (15 passed)
-Tests run: 95, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 162, Failures: 0, Errors: 0, Skipped: 0
 All coverage checks have been met.
 BUILD SUCCESS
 ```
 
 ## Cobertura
 
-O JaCoCo é executado no `verify`, gera relatório em `target/jacoco-report/` e falha o build quando a cobertura de instruções do bundle fica abaixo de 80%. O [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md) publica esse diretório como artifact `jacoco-report-oficina-os-service` e envia `target/jacoco-report/jacoco.xml` ao SonarCloud.
+O JaCoCo é executado no `verify`, gera relatório em `target/jacoco-report/` e falha o build quando a cobertura de instruções do bundle fica abaixo de 90%. O [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md) publica esse diretório como artifact `jacoco-report-oficina-os-service` e envia `target/jacoco-report/jacoco.xml` ao SonarCloud.
 
-Evidência local de cobertura em 2026-07-01:
+Evidência local de cobertura em 2026-07-12:
 
 ```text
-instruction=92.24% branch=69.73% line=90.94% complexity=72.01%
+instruction=94.61% branch=77.90% line=94.10% complexity=83.39%
 ```
 
 ## CI/CD
 
 Os workflows ficam em [.github/workflows/service-ci.yml](.github/workflows/service-ci.yml) e [.github/workflows/open-pr-to-main.yml](.github/workflows/open-pr-to-main.yml), derivados do [Template GitHub Actions para Microsserviços](../oficina-platform/templates/github-actions/README.md).
 
-Pull requests e pushes na `main` executam o check `service-ci-validate` com `./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false`, validam a cobertura mínima de 80%, publicam o artifact `jacoco-report-oficina-os-service` e executam SonarCloud com o relatório `target/jacoco-report/jacoco.xml`. O secret `SONAR_TOKEN` deve existir no repositório ou na organização GitHub, e a Automatic Analysis do SonarCloud deve ficar desabilitada para evitar análise duplicada sem cobertura.
+Pull requests e pushes na `main` executam o check `service-ci-validate` com `./mvnw -B verify -Ppostgresql -DskipITs=false -DfailIfNoTests=false`, validam a cobertura mínima de 90%, publicam o artifact `jacoco-report-oficina-os-service` e executam SonarCloud com o relatório `target/jacoco-report/jacoco.xml`. O secret `SONAR_TOKEN` deve existir no repositório ou na organização GitHub, e a Automatic Analysis do SonarCloud deve ficar desabilitada para evitar análise duplicada sem cobertura.
 
 A publicação de imagem e o deploy Kubernetes são automáticos por padrão em `main` e podem ser desligados explicitamente:
 
@@ -150,7 +174,13 @@ O teste [PlatformContractsTest](src/test/java/br/com/oficina/os/contracts/Platfo
 
 ```bash
 docker build --build-arg MAVEN_PROFILE=postgresql -t oficina-os-service:local .
-docker run --rm -p 8080:8080 oficina-os-service:local
+docker run --rm -p 8080:8080 \
+  -e QUARKUS_PROFILE=dev \
+  -e OFICINA_PERSISTENCE_KIND=memory \
+  -e QUARKUS_DATASOURCE_ACTIVE=false \
+  -e QUARKUS_FLYWAY_ACTIVE=false \
+  -e MP_JWT_VERIFY_PUBLICKEY_LOCATION=classpath:jwt/publicKey.pem \
+  oficina-os-service:local
 ```
 
 ## Kubernetes

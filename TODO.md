@@ -16,9 +16,10 @@
 - [x] Reorganizar a aplicação em portas e casos de uso de Clean Architecture, isolando `core/` de CDI/JAX-RS/framework e mantendo `AtendimentoSeedStore` apenas como facade de seleção de adapter.
 - [x] Criar testes unitários e de integração mínimos para APIs, persistência, eventos, idempotência e Saga.
 - [x] Criar cenários BDD automatizados do fluxo feliz e de falha compensada da Saga em [saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature).
-- [x] Configurar cobertura mínima de 80% com JaCoCo e evidência no README/CI, conforme [Padrão BDD, Cobertura e Qualidade](../oficina-platform/docs/delivery/bdd-testing.md).
+- [x] Configurar cobertura mínima de 90% com JaCoCo e evidência no README/CI, conforme [Padrão BDD, Cobertura e Qualidade](../oficina-platform/docs/delivery/bdd-testing.md).
 - [x] Validar contratos OpenAPI, schemas JSON de eventos, erro padronizado, idempotência e Saga.
 - [x] Copiar e adaptar workflows de CI/CD, garantindo build, testes, Quality Gate, publicação de imagem e deploy automatizado condicionado por variáveis de ambiente.
+- [x] Impedir fallback silencioso para memória em `prod`/`lab` e validar PostgreSQL, SNS/SQS e configurações obrigatórias no startup, mantendo memória somente em teste ou execução local deliberada.
 
 ## Eventos Produzidos
 

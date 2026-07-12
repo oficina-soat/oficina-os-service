@@ -40,14 +40,24 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
         if ("memory".equalsIgnoreCase(persistenceKind)) {
             return new InMemoryAtendimentoGateway();
         }
-        return new PostgresAtendimentoGateway(dataSources.get());
+        if ("postgresql".equalsIgnoreCase(persistenceKind)) {
+            return new PostgresAtendimentoGateway(dataSources.get());
+        }
+        throw unsupportedPersistenceKind(persistenceKind);
     }
 
     private static AtendimentoGateway createDelegate(String persistenceKind, DataSource dataSource) {
         if ("memory".equalsIgnoreCase(persistenceKind)) {
             return new InMemoryAtendimentoGateway();
         }
-        return new PostgresAtendimentoGateway(dataSource);
+        if ("postgresql".equalsIgnoreCase(persistenceKind)) {
+            return new PostgresAtendimentoGateway(dataSource);
+        }
+        throw unsupportedPersistenceKind(persistenceKind);
+    }
+
+    private static IllegalArgumentException unsupportedPersistenceKind(String persistenceKind) {
+        return new IllegalArgumentException("oficina.persistence.kind deve ser postgresql ou memory: " + persistenceKind);
     }
 
     @Override
