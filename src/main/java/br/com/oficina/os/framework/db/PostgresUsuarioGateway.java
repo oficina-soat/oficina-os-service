@@ -1,5 +1,8 @@
 package br.com.oficina.os.framework.db;
 
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.correlationId;
+import static br.com.oficina.os.framework.db.AtendimentoEventLog.logEvent;
+
 import br.com.oficina.os.core.entities.pessoa.Pessoa;
 import br.com.oficina.os.core.entities.pessoa.TipoPessoa;
 import br.com.oficina.os.core.entities.usuario.CpfOperacional;
@@ -9,6 +12,9 @@ import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
 import br.com.oficina.os.core.exceptions.UsuarioConflitanteException;
 import br.com.oficina.os.core.exceptions.UsuarioNaoEncontradoException;
 import br.com.oficina.os.core.interfaces.gateway.UsuarioGateway;
+import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,11 +24,23 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jboss.logging.Logger;
 
 class PostgresUsuarioGateway implements UsuarioGateway {
+    private static final Logger LOG = Logger.getLogger(PostgresUsuarioGateway.class);
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String PRODUCER = "oficina-os-service";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String EVENT_USUARIO_ADICIONADO = "usuarioAdicionado";
+    private static final String EVENT_USUARIO_ATUALIZADO = "usuarioAtualizado";
+    private static final String EVENT_USUARIO_EXCLUIDO = "usuarioExcluido";
+    private static final String TOPIC_USUARIO_ADICIONADO = "oficina.os.usuario-adicionado";
+    private static final String TOPIC_USUARIO_ATUALIZADO = "oficina.os.usuario-atualizado";
+    private static final String TOPIC_USUARIO_EXCLUIDO = "oficina.os.usuario-excluido";
     private static final String SQL_SELECT_USUARIOS = """
             SELECT u.id AS usuario_id,
                    p.id AS pessoa_id,
@@ -71,7 +89,9 @@ class PostgresUsuarioGateway implements UsuarioGateway {
                 statement.executeUpdate();
             }
             substituirPapeis(connection, persistido.id(), persistido.papeis());
-            return buscar(connection, persistido.id());
+            var criado = buscar(connection, persistido.id());
+            enfileirarEvento(connection, EVENT_USUARIO_ADICIONADO, TOPIC_USUARIO_ADICIONADO, criado);
+            return criado;
         });
     }
 
@@ -128,7 +148,9 @@ class PostgresUsuarioGateway implements UsuarioGateway {
                 statement.executeUpdate();
             }
             substituirPapeis(connection, usuario.id(), usuario.papeis());
-            return buscar(connection, usuario.id());
+            var atualizado = buscar(connection, usuario.id());
+            enfileirarEvento(connection, EVENT_USUARIO_ATUALIZADO, TOPIC_USUARIO_ATUALIZADO, atualizado);
+            return atualizado;
         });
     }
 
@@ -136,17 +158,84 @@ class PostgresUsuarioGateway implements UsuarioGateway {
     public void inativar(UUID usuarioId) {
         inTransaction(connection -> {
             bloquearUsuario(connection, usuarioId);
+            var atual = buscar(connection, usuarioId);
+            if (atual.status() == UsuarioStatus.INATIVO) {
+                return null;
+            }
+            var atualizadoEm = OffsetDateTime.now(ZoneOffset.UTC);
             try (var statement = connection.prepareStatement("""
                     UPDATE usuario
                     SET status = 'INATIVO', atualizado_em = ?
-                    WHERE id = ? AND status <> 'INATIVO'
+                    WHERE id = ?
                     """)) {
-                statement.setObject(1, OffsetDateTime.now(ZoneOffset.UTC));
+                statement.setObject(1, atualizadoEm);
                 statement.setObject(2, usuarioId);
                 statement.executeUpdate();
             }
+            var inativado = buscar(connection, usuarioId);
+            enfileirarEvento(connection, EVENT_USUARIO_EXCLUIDO, TOPIC_USUARIO_EXCLUIDO, inativado);
             return null;
         });
+    }
+
+    private void enfileirarEvento(Connection connection, String eventType, String topic, Usuario usuario)
+            throws SQLException {
+        var occurredAt = usuario.atualizadoEm();
+        var event = new OutboxEventRecord(
+                UUID.randomUUID(),
+                usuario.id(),
+                eventType,
+                1,
+                topic,
+                PRODUCER,
+                snapshot(usuario),
+                STATUS_PENDING,
+                correlationId(null),
+                occurredAt,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                null,
+                0,
+                null);
+        try (var statement = connection.prepareStatement("""
+                INSERT INTO outbox_event (
+                    id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                    correlation_id, occurred_at, created_at, published_at, attempts, next_attempt_at, last_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, NULL, ?, NULL, NULL)
+                """)) {
+            statement.setObject(1, event.eventId());
+            statement.setString(2, event.aggregateId().toString());
+            statement.setString(3, event.eventType());
+            statement.setInt(4, event.eventVersion());
+            statement.setString(5, event.topic());
+            statement.setString(6, event.producer());
+            statement.setString(7, toJson(event.payload()));
+            statement.setString(8, event.status());
+            statement.setString(9, event.correlationId());
+            statement.setObject(10, event.occurredAt());
+            statement.setObject(11, event.createdAt());
+            statement.setInt(12, event.attempts());
+            statement.executeUpdate();
+        }
+        logEvent(LOG, "user domain event registered", event, STATUS_PENDING);
+    }
+
+    private Map<String, Object> snapshot(Usuario usuario) {
+        return Map.of(
+                "usuarioId", usuario.id().toString(),
+                "pessoaId", usuario.pessoa().id().toString(),
+                "nome", usuario.pessoa().nome(),
+                "documento", usuario.pessoa().documento().valor(),
+                "status", usuario.status().name(),
+                "papeis", usuario.papeis().stream().map(TipoDePapel::valor).sorted().toList(),
+                "atualizadoEm", usuario.atualizadoEm().toString());
+    }
+
+    private String toJson(Map<String, Object> payload) throws SQLException {
+        try {
+            return JSON.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new SQLException("Payload do evento de usuário é inválido.", exception);
+        }
     }
 
     private Pessoa persistirOuReutilizarPessoa(

@@ -135,6 +135,9 @@ public class LocalStackMessagingTestResource implements QuarkusTestResourceLifec
                 new Route("oficina.billing.pagamento-recusado", List.of("oficina-os-service")),
                 new Route("oficina.execution.estoque-acrescentado", List.of("oficina-billing-service")),
                 new Route("oficina.execution.estoque-baixado", List.of("oficina-billing-service")),
+                new Route("oficina.os.usuario-adicionado", List.of("oficina-auth-sync-lambda")),
+                new Route("oficina.os.usuario-atualizado", List.of("oficina-auth-sync-lambda")),
+                new Route("oficina.os.usuario-excluido", List.of("oficina-auth-sync-lambda")),
                 new Route("oficina.saga.saga-compensada", List.of("oficina-billing-service", "oficina-execution-service")),
                 new Route("oficina.saga.saga-finalizada-com-sucesso", List.of("oficina-billing-service", "oficina-execution-service")));
     }

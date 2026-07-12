@@ -91,7 +91,7 @@ Esse modo mantém dados apenas durante o processo e não deve ser usado em image
 
 Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=postgresql`) no database `oficina_os`, com migrations Flyway. Pessoa, Usuário, papéis, Cliente, Veículo, Ordem de Serviço, histórico de estados, Saga, Inbox e Outbox usam adapters JDBC e devem sobreviver a restart do processo ou pod quando conectados ao banco do ambiente.
 
-A migration `V5__remove_usuario_password_hash.sql` remove a coluna histórica `usuario.password_hash`. O database `oficina_os` não armazena credenciais; a integração futura com o store do `oficina-auth-lambda` deve usar provisionamento ou sincronização explícita definida pela plataforma.
+A migration `V5__remove_usuario_password_hash.sql` remove a coluna histórica `usuario.password_hash`. O database `oficina_os` não armazena credenciais; o store do `oficina-auth-lambda` recebe somente a projeção operacional pelos eventos de usuário.
 
 O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`), execução local deliberada com profile `dev` e fixtures explícitas. Os seletores dos adapters aceitam somente `postgresql` ou `memory`; valores desconhecidos interrompem a inicialização. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers, aplica as migrations do serviço e exercita o CRUD persistente de usuários.
 
@@ -105,7 +105,7 @@ As rotas abaixo exigem JWT com o papel `administrativo`:
 - `PUT /api/v1/usuarios/{usuarioId}`: substitui nome, CPF, status e papéis;
 - `DELETE /api/v1/usuarios/{usuarioId}`: realiza exclusão lógica, alterando o status para `INATIVO`.
 
-O payload não aceita senha. Os papéis canônicos são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
+O payload não aceita senha. Os papéis canônicos são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. Criação, atualização e primeira inativação persistem, na mesma transação, `usuarioAdicionado`, `usuarioAtualizado` e `usuarioExcluido` na Outbox. Os eventos carregam o snapshot de Pessoa e Usuário sem credenciais para o consumidor `oficina-auth-sync-lambda`. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md), no [Contrato de Eventos de Domínio](../oficina-platform/contracts/Contrato%20de%20Eventos%20de%20Dom%C3%ADnio.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
 
 ## Fail-fast de runtime
 
@@ -264,4 +264,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, o CRUD administrativo de usuários, a idempotência persistente, a mensageria SNS/SQS e o fail-fast de runtime foram implementados. A próxima integração funcional está no roadmap da plataforma: provisionar ou sincronizar usuários operacionais com o store do `oficina-auth-lambda`, além das evidências remotas no ambiente `lab`.
+O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, o CRUD administrativo de usuários com eventos transacionais, a idempotência persistente, a mensageria SNS/SQS e o fail-fast de runtime foram implementados. Permanecem as evidências remotas no ambiente `lab` e os itens posteriores do roadmap da plataforma.

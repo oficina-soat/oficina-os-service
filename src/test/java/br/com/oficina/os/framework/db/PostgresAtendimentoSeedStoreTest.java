@@ -27,6 +27,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.NotFoundException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -160,6 +161,25 @@ class PostgresAtendimentoSeedStoreTest {
         usuarioStore.inativar(criado.id());
         usuarioStore.inativar(criado.id());
         assertEquals(UsuarioStatus.INATIVO, usuarioStore.buscar(criado.id()).status());
+
+        var eventosDoUsuario = store.listarOutbox().stream()
+                .filter(event -> event.aggregateId().equals(criado.id()))
+                .toList();
+        assertEquals(3, eventosDoUsuario.size());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioAdicionado")).count());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioAtualizado")).count());
+        assertEquals(1, eventosDoUsuario.stream().filter(event -> event.eventType().equals("usuarioExcluido")).count());
+        assertTrue(eventosDoUsuario.stream().allMatch(event -> event.producer().equals("oficina-os-service")));
+        assertTrue(eventosDoUsuario.stream().allMatch(event -> event.payload().get("usuarioId").equals(criado.id().toString())));
+        assertTrue(eventosDoUsuario.stream().noneMatch(event -> event.payload().containsKey("password")));
+        var exclusao = eventosDoUsuario.stream()
+                .filter(event -> event.eventType().equals("usuarioExcluido"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("oficina.os.usuario-excluido", exclusao.topic());
+        assertEquals("INATIVO", exclusao.payload().get("status"));
+        assertEquals("52998224725", exclusao.payload().get("documento"));
+        assertEquals(List.of("administrativo"), exclusao.payload().get("papeis"));
 
         assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(new Usuario(
                 UUID.randomUUID(),
