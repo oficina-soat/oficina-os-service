@@ -1,6 +1,7 @@
 package br.com.oficina.os.framework.messaging;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
@@ -30,6 +31,14 @@ class SnsSqsMessagingIntegrationTest {
 
     @Inject
     SqsDomainEventConsumer sqsConsumer;
+
+    @Inject
+    AwsDomainMessagingClient messagingClient;
+
+    @Test
+    void deveValidarTopicosEFilasObrigatoriosNoStartupProtegido() {
+        assertDoesNotThrow(messagingClient::validarDependencias);
+    }
 
     @Test
     void devePublicarOutboxNoSnsEEntregarNaFilaConsumidora() throws Exception {

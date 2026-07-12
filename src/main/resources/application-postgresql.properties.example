@@ -1,9 +1,19 @@
 quarkus.datasource.db-kind=postgresql
 oficina.persistence.kind=postgresql
-quarkus.datasource.username=${DB_USERNAME}
-quarkus.datasource.password=${DB_PASSWORD}
-quarkus.datasource.jdbc.url=${JDBC_DATABASE_URL}
-quarkus.datasource.reactive.url=${REACTIVE_DATABASE_URL}
+quarkus.datasource.username=${DB_USERNAME:oficina_os_user}
+quarkus.datasource.password=${DB_PASSWORD:oficina_os_password}
+quarkus.datasource.jdbc.url=${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/oficina_os}
+quarkus.datasource.reactive.url=${REACTIVE_DATABASE_URL:postgresql://localhost:5432/oficina_os}
+
+%prod.quarkus.datasource.username=${DB_USERNAME}
+%prod.quarkus.datasource.password=${DB_PASSWORD}
+%prod.quarkus.datasource.jdbc.url=${JDBC_DATABASE_URL}
+%prod.quarkus.datasource.reactive.url=${REACTIVE_DATABASE_URL}
+
+%lab.quarkus.datasource.username=${DB_USERNAME}
+%lab.quarkus.datasource.password=${DB_PASSWORD}
+%lab.quarkus.datasource.jdbc.url=${JDBC_DATABASE_URL}
+%lab.quarkus.datasource.reactive.url=${REACTIVE_DATABASE_URL}
 
 quarkus.flyway.migrate-at-start=true
 quarkus.flyway.locations=db/migration
@@ -15,9 +25,14 @@ quarkus.hibernate-orm.schema-management.strategy=none
 %dev.quarkus.flyway.clean-at-start=true
 %dev.quarkus.flyway.migrate-at-start=true
 
-%test.quarkus.datasource.devservices.enabled=true
-%test.quarkus.flyway.clean-at-start=true
-%test.quarkus.flyway.migrate-at-start=true
+%test.quarkus.datasource.devservices.enabled=false
+%test.quarkus.datasource.active=false
+%test.quarkus.flyway.active=false
+%test.quarkus.flyway.clean-at-start=false
+%test.quarkus.flyway.migrate-at-start=false
 
 %prod.quarkus.flyway.clean-at-start=false
 %prod.quarkus.flyway.migrate-at-start=true
+
+%lab.quarkus.flyway.clean-at-start=false
+%lab.quarkus.flyway.migrate-at-start=true

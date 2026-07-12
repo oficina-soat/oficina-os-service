@@ -28,7 +28,10 @@ public class PersistentIdempotencyStore implements IdempotencyStore {
         if ("memory".equalsIgnoreCase(persistenceKind)) {
             return new InMemoryIdempotencyStore();
         }
-        return new PostgresIdempotencyStore(dataSources.get());
+        if ("postgresql".equalsIgnoreCase(persistenceKind)) {
+            return new PostgresIdempotencyStore(dataSources.get());
+        }
+        throw new IllegalArgumentException("oficina.persistence.kind deve ser postgresql ou memory: " + persistenceKind);
     }
 
     @Override

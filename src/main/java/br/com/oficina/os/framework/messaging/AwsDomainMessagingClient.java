@@ -10,11 +10,13 @@ import java.util.Optional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.GetTopicAttributesRequest;
 import software.amazon.awssdk.services.sns.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -25,7 +27,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sts.StsClient;
 
 @ApplicationScoped
-class AwsDomainMessagingClient {
+public class AwsDomainMessagingClient {
     private static final String LOCALSTACK_ACCOUNT_ID = "000000000000";
 
     private final String region;
@@ -40,14 +42,20 @@ class AwsDomainMessagingClient {
     AwsDomainMessagingClient(
             @ConfigProperty(name = "quarkus.application.name") String applicationName,
             @ConfigProperty(name = "AWS_REGION", defaultValue = "us-east-1") String region,
-            @ConfigProperty(name = "oficina.messaging.endpoint-override", defaultValue = "") String endpointOverride,
+            @ConfigProperty(name = "oficina.messaging.endpoint-override") Optional<String> configuredEndpointOverride,
             @ConfigProperty(name = "oficina.messaging.aws-account-id") Optional<String> configuredAccountId,
             @ConfigProperty(name = "oficina.messaging.aws-access-key-id") Optional<String> accessKeyId,
-            @ConfigProperty(name = "oficina.messaging.aws-secret-access-key") Optional<String> secretAccessKey) {
+            @ConfigProperty(name = "oficina.messaging.aws-secret-access-key") Optional<String> secretAccessKey,
+            @ConfigProperty(name = "oficina.messaging.aws-session-token") Optional<String> sessionToken) {
+        var endpointOverride = configuredEndpointOverride.orElse("");
         this.region = region;
         this.endpointOverride = endpointOverride;
         this.configuredAccountId = configuredAccountId.orElse("");
-        var credentialsProvider = credentialsProvider(accessKeyId.orElse(""), secretAccessKey.orElse(""), endpointOverride);
+        var credentialsProvider = credentialsProvider(
+                accessKeyId.orElse(""),
+                secretAccessKey.orElse(""),
+                sessionToken.orElse(""),
+                endpointOverride);
         this.snsClient = snsClient(region, endpointOverride, credentialsProvider);
         this.sqsClient = sqsClient(region, endpointOverride, credentialsProvider);
         this.stsClient = stsClient(region, credentialsProvider);
@@ -80,6 +88,12 @@ class AwsDomainMessagingClient {
                 .queueUrl(queueUrl)
                 .receiptHandle(message.receiptHandle())
                 .build());
+    }
+
+    public void validarDependencias() {
+        DomainMessagingRoutes.producedTopics().forEach(topic -> snsClient.getTopicAttributes(
+                GetTopicAttributesRequest.builder().topicArn(topicArn(topic)).build()));
+        DomainMessagingRoutes.consumedTopics().forEach(this::queueUrl);
     }
 
     @PreDestroy
@@ -128,8 +142,23 @@ class AwsDomainMessagingClient {
         return Map.copyOf(result);
     }
 
-    private static AwsCredentialsProvider credentialsProvider(String accessKeyId, String secretAccessKey, String endpointOverride) {
+    private static AwsCredentialsProvider credentialsProvider(
+            String accessKeyId,
+            String secretAccessKey,
+            String sessionToken,
+            String endpointOverride) {
+        if (accessKeyId.isBlank() != secretAccessKey.isBlank()
+                || (!sessionToken.isBlank() && (accessKeyId.isBlank() || secretAccessKey.isBlank()))) {
+            throw new IllegalStateException(
+                    "Credenciais AWS explícitas estão incompletas; access key e secret key são obrigatórias, e o session token exige ambas.");
+        }
         if (!accessKeyId.isBlank() && !secretAccessKey.isBlank()) {
+            if (!sessionToken.isBlank()) {
+                return StaticCredentialsProvider.create(AwsSessionCredentials.create(
+                        accessKeyId,
+                        secretAccessKey,
+                        sessionToken));
+            }
             return StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKeyId, secretAccessKey));
         }
         if (!endpointOverride.isBlank()) {
