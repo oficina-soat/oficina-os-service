@@ -52,9 +52,30 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             ORDER BY created_at
             FOR UPDATE
             """;
+    private static final String SQL_SELECT_PENDING_OUTBOX_FOR_PUBLICATION = """
+            SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                   correlation_id, occurred_at, created_at, published_at, attempts, last_error
+            FROM outbox_event
+            WHERE status = ?
+              AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+            ORDER BY created_at
+            LIMIT ?
+            """;
+    private static final String SQL_SELECT_OUTBOX_BY_ID_FOR_UPDATE = """
+            SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
+                   correlation_id, occurred_at, created_at, published_at, attempts, last_error
+            FROM outbox_event
+            WHERE id = ?
+            FOR UPDATE
+            """;
     private static final String SQL_MARK_OUTBOX_PUBLISHED = """
             UPDATE outbox_event
             SET status = ?, published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
+            WHERE id = ?
+            """;
+    private static final String SQL_MARK_OUTBOX_FAILURE = """
+            UPDATE outbox_event
+            SET status = ?, attempts = ?, next_attempt_at = ?, last_error = ?, published_at = NULL
             WHERE id = ?
             """;
 
@@ -152,6 +173,21 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     @Override
     public List<OutboxEventRecord> publicarEventosPendentes() {
         return publicarEventosPendentesPostgres();
+    }
+
+    @Override
+    public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
+        return listarEventosPendentesParaPublicacaoPostgres(limit);
+    }
+
+    @Override
+    public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
+        return marcarEventoPublicadoPostgres(eventId);
+    }
+
+    @Override
+    public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
+        return marcarFalhaPublicacaoPostgres(eventId, lastError, nextAttemptAt, failed);
     }
 
     @Override
@@ -499,48 +535,109 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     private List<OutboxEventRecord> publicarEventosPendentesPostgres() {
-        var agora = OffsetDateTime.now(ZoneOffset.UTC);
-        var publicados = inTransaction(connection -> {
-            var pendentes = new ArrayList<OutboxEventRecord>();
-            try (var statement = connection.prepareStatement(SQL_SELECT_OUTBOX_BY_STATUS_FOR_UPDATE)) {
-                statement.setString(1, STATUS_PENDING);
-                try (var resultSet = statement.executeQuery()) {
-                    while (resultSet.next()) {
-                        pendentes.add(toOutboxEvent(resultSet));
-                    }
+        return listarEventosPendentesParaPublicacaoPostgres(Integer.MAX_VALUE).stream()
+                .map(event -> marcarEventoPublicadoPostgres(event.eventId()))
+                .toList();
+    }
+
+    private List<OutboxEventRecord> listarEventosPendentesParaPublicacaoPostgres(int limit) {
+        var effectiveLimit = Math.max(1, limit);
+        try (var connection = dataSource.getConnection();
+                var statement = connection.prepareStatement(SQL_SELECT_PENDING_OUTBOX_FOR_PUBLICATION)) {
+            statement.setString(1, STATUS_PENDING);
+            statement.setObject(2, OffsetDateTime.now(ZoneOffset.UTC));
+            statement.setInt(3, effectiveLimit);
+            try (var resultSet = statement.executeQuery()) {
+                var result = new ArrayList<OutboxEventRecord>();
+                while (resultSet.next()) {
+                    result.add(toOutboxEvent(resultSet));
                 }
+                return List.copyOf(result);
             }
-            var events = new ArrayList<OutboxEventRecord>();
+        } catch (SQLException exception) {
+            throw persistenceFailure(exception);
+        }
+    }
+
+    private OutboxEventRecord marcarEventoPublicadoPostgres(UUID eventId) {
+        var publicado = inTransaction(connection -> {
+            var event = buscarOutboxPorIdParaUpdate(connection, eventId);
+            var agora = OffsetDateTime.now(ZoneOffset.UTC);
+            var updated = new OutboxEventRecord(
+                    event.eventId(),
+                    event.aggregateId(),
+                    event.eventType(),
+                    event.eventVersion(),
+                    event.topic(),
+                    event.producer(),
+                    event.payload(),
+                    STATUS_PUBLISHED,
+                    event.correlationId(),
+                    event.occurredAt(),
+                    event.createdAt(),
+                    agora,
+                    event.attempts() + 1,
+                    null);
             try (var statement = connection.prepareStatement(SQL_MARK_OUTBOX_PUBLISHED)) {
-                statement.setString(1, STATUS_PUBLISHED);
-                statement.setObject(2, agora);
-                for (var event : pendentes) {
-                    var publicado = new OutboxEventRecord(
-                            event.eventId(),
-                            event.aggregateId(),
-                            event.eventType(),
-                            event.eventVersion(),
-                            event.topic(),
-                            event.producer(),
-                            event.payload(),
-                            STATUS_PUBLISHED,
-                            event.correlationId(),
-                            event.occurredAt(),
-                            event.createdAt(),
-                            agora,
-                            event.attempts() + 1,
-                            null);
-                    statement.setInt(3, publicado.attempts());
-                    statement.setObject(4, publicado.eventId());
-                    statement.addBatch();
-                    events.add(publicado);
-                }
-                statement.executeBatch();
+                statement.setString(1, updated.status());
+                statement.setObject(2, updated.publishedAt());
+                statement.setInt(3, updated.attempts());
+                statement.setObject(4, updated.eventId());
+                statement.executeUpdate();
             }
-            return List.copyOf(events);
+            return updated;
         });
-        publicados.forEach(event -> logEvent(LOG, "outbox event published", event, STATUS_PUBLISHED));
-        return publicados;
+        logEvent(LOG, "outbox event published", publicado, STATUS_PUBLISHED);
+        return publicado;
+    }
+
+    private OutboxEventRecord marcarFalhaPublicacaoPostgres(
+            UUID eventId,
+            String lastError,
+            OffsetDateTime nextAttemptAt,
+            boolean failed) {
+        var status = failed ? STATUS_FAILED : STATUS_PENDING;
+        var updated = inTransaction(connection -> {
+            var event = buscarOutboxPorIdParaUpdate(connection, eventId);
+            var failure = new OutboxEventRecord(
+                    event.eventId(),
+                    event.aggregateId(),
+                    event.eventType(),
+                    event.eventVersion(),
+                    event.topic(),
+                    event.producer(),
+                    event.payload(),
+                    status,
+                    event.correlationId(),
+                    event.occurredAt(),
+                    event.createdAt(),
+                    null,
+                    event.attempts() + 1,
+                    lastError);
+            try (var statement = connection.prepareStatement(SQL_MARK_OUTBOX_FAILURE)) {
+                statement.setString(1, failure.status());
+                statement.setInt(2, failure.attempts());
+                statement.setObject(3, failed ? null : nextAttemptAt);
+                statement.setString(4, failure.lastError());
+                statement.setObject(5, failure.eventId());
+                statement.executeUpdate();
+            }
+            return failure;
+        });
+        logEvent(LOG, "outbox event publication failed", updated, status);
+        return updated;
+    }
+
+    private OutboxEventRecord buscarOutboxPorIdParaUpdate(Connection connection, UUID eventId) throws SQLException {
+        try (var statement = connection.prepareStatement(SQL_SELECT_OUTBOX_BY_ID_FOR_UPDATE)) {
+            statement.setObject(1, eventId);
+            try (var resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return toOutboxEvent(resultSet);
+                }
+                throw new IllegalStateException("Evento de Outbox nao encontrado: " + eventId);
+            }
+        }
     }
 
     private SagaRecord consumirEventoPostgres(DomainEventEnvelope event) {

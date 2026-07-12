@@ -25,6 +25,7 @@ final class AtendimentoGatewaySupport {
     static final String PAYLOAD_MOTIVO = "motivo";
     static final String STATUS_PENDING = "PENDING";
     static final String STATUS_PUBLISHED = "PUBLISHED";
+    static final String STATUS_FAILED = "FAILED";
 
     private AtendimentoGatewaySupport() {
     }

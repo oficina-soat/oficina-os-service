@@ -49,6 +49,12 @@ public interface AtendimentoGateway {
 
     List<OutboxEventRecord> publicarEventosPendentes();
 
+    List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit);
+
+    OutboxEventRecord marcarEventoPublicado(UUID eventId);
+
+    OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed);
+
     SagaRecord consumirEvento(DomainEventEnvelope event);
 
     record ClienteRecord(
