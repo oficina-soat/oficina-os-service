@@ -272,32 +272,76 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     @Override
     public synchronized List<OutboxEventRecord> publicarEventosPendentes() {
+        return listarEventosPendentesParaPublicacao(Integer.MAX_VALUE).stream()
+                .map(event -> marcarEventoPublicado(event.eventId()))
+                .toList();
+    }
+
+    @Override
+    public synchronized List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
         var agora = OffsetDateTime.now(ZoneOffset.UTC);
-        var publicados = new ArrayList<OutboxEventRecord>();
-        for (var event : new ArrayList<>(outboxEvents.values())) {
-            if (!STATUS_PENDING.equals(event.status())) {
-                continue;
-            }
-            var publicado = new OutboxEventRecord(
-                    event.eventId(),
-                    event.aggregateId(),
-                    event.eventType(),
-                    event.eventVersion(),
-                    event.topic(),
-                    event.producer(),
-                    event.payload(),
-                    STATUS_PUBLISHED,
-                    event.correlationId(),
-                    event.occurredAt(),
-                    event.createdAt(),
-                    agora,
-                    event.attempts() + 1,
-                    null);
-            outboxEvents.put(publicado.eventId(), publicado);
-            publicados.add(publicado);
-            logEvent(LOG, "outbox event published", publicado, STATUS_PUBLISHED);
+        return outboxEvents.values().stream()
+                .filter(event -> STATUS_PENDING.equals(event.status()))
+                .filter(event -> event.publishedAt() == null)
+                .filter(event -> event.createdAt().isBefore(agora) || event.createdAt().isEqual(agora))
+                .limit(Math.max(1, limit))
+                .toList();
+    }
+
+    @Override
+    public synchronized OutboxEventRecord marcarEventoPublicado(UUID eventId) {
+        var event = buscarOutbox(eventId);
+        var agora = OffsetDateTime.now(ZoneOffset.UTC);
+        var publicado = new OutboxEventRecord(
+                event.eventId(),
+                event.aggregateId(),
+                event.eventType(),
+                event.eventVersion(),
+                event.topic(),
+                event.producer(),
+                event.payload(),
+                STATUS_PUBLISHED,
+                event.correlationId(),
+                event.occurredAt(),
+                event.createdAt(),
+                agora,
+                event.attempts() + 1,
+                null);
+        outboxEvents.put(publicado.eventId(), publicado);
+        logEvent(LOG, "outbox event published", publicado, STATUS_PUBLISHED);
+        return publicado;
+    }
+
+    @Override
+    public synchronized OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
+        var event = buscarOutbox(eventId);
+        var status = failed ? STATUS_FAILED : STATUS_PENDING;
+        var failure = new OutboxEventRecord(
+                event.eventId(),
+                event.aggregateId(),
+                event.eventType(),
+                event.eventVersion(),
+                event.topic(),
+                event.producer(),
+                event.payload(),
+                status,
+                event.correlationId(),
+                event.occurredAt(),
+                event.createdAt(),
+                null,
+                event.attempts() + 1,
+                lastError);
+        outboxEvents.put(failure.eventId(), failure);
+        logEvent(LOG, "outbox event publication failed", failure, status);
+        return failure;
+    }
+
+    private OutboxEventRecord buscarOutbox(UUID eventId) {
+        var event = outboxEvents.get(eventId);
+        if (event == null) {
+            throw new IllegalStateException("Evento de Outbox nao encontrado: " + eventId);
         }
-        return publicados;
+        return event;
     }
 
     @Override

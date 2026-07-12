@@ -79,6 +79,21 @@ Em runtime, a persistência padrão é PostgreSQL (`oficina.persistence.kind=pos
 
 O modo em memória permanece apenas para testes rápidos (`%test.oficina.persistence.kind=memory`) e fixtures explícitas. A validação com PostgreSQL real fica coberta por [PostgresAtendimentoSeedStoreTest](src/test/java/br/com/oficina/os/framework/db/PostgresAtendimentoSeedStoreTest.java), que sobe PostgreSQL via Testcontainers e aplica as migrations do serviço.
 
+## Mensageria SNS/SQS
+
+O serviço publica eventos de OS e Saga exclusivamente pela Outbox local. Quando `OFICINA_MESSAGING_ENABLED=true`, o worker assíncrono publica pendentes no SNS canônico, aplica retry/backoff, marca `PUBLISHED` após sucesso e marca `FAILED` ao esgotar tentativas. O consumo usa filas SQS por tópico/consumidor e só remove a mensagem depois do processamento persistido na Saga local.
+
+Configuração principal:
+
+- `OFICINA_MESSAGING_ENABLED`
+- `OFICINA_MESSAGING_ENDPOINT_OVERRIDE`, para LocalStack
+- `OFICINA_MESSAGING_PUBLISHER_BATCH_SIZE`
+- `OFICINA_MESSAGING_PUBLISHER_MAX_ATTEMPTS`
+- `OFICINA_MESSAGING_CONSUMER_MAX_MESSAGES`
+- `OFICINA_MESSAGING_CONSUMER_WAIT_TIME_SECONDS`
+
+Os nomes físicos de tópicos e filas seguem o padrão do `oficina-infra`: pontos do tópico canônico são trocados por hífen, e filas consumidoras usam `<topico>.<servico-consumidor>`. A validação local de publicação e consumo SNS/SQS fica em [SnsSqsMessagingIntegrationTest](src/test/java/br/com/oficina/os/framework/messaging/SnsSqsMessagingIntegrationTest.java), com LocalStack via Testcontainers.
+
 ## Testes e BDD
 
 Os cenários BDD da Saga estão em [src/test/resources/features/saga_ordem_servico.feature](src/test/resources/features/saga_ordem_servico.feature), com steps em [src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java](src/test/java/br/com/oficina/os/bdd/SagaOrdemServicoSteps.java). Eles validam o fluxo feliz da OS por eventos consumidos de `oficina-execution-service` e `oficina-billing-service`, encerrando a Saga com `sagaFinalizadaComSucesso`, e um fluxo de falha operacional antes da finalização, encerrando a Saga com `sagaCompensada`.
@@ -202,4 +217,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime do domínio, Saga, Inbox e Outbox foi implementada localmente; os próximos incrementos esperados no Épico B2 permanecem no roadmap da plataforma, principalmente mensageria SNS/SQS real, idempotência persistente e evidência remota no ambiente `lab`.
+O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, a idempotência persistente e a mensageria SNS/SQS local foram implementadas; as próximas pendências ficam no roadmap da plataforma, principalmente proteção contra fallback silencioso e evidência remota no ambiente `lab`.

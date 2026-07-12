@@ -7,6 +7,7 @@ import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -137,6 +138,21 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     @Override
     public List<OutboxEventRecord> publicarEventosPendentes() {
         return delegate.publicarEventosPendentes();
+    }
+
+    @Override
+    public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
+        return delegate.listarEventosPendentesParaPublicacao(limit);
+    }
+
+    @Override
+    public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
+        return delegate.marcarEventoPublicado(eventId);
+    }
+
+    @Override
+    public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
+        return delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed);
     }
 
     @Override

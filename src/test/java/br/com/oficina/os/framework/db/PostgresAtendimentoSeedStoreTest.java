@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
+import br.com.oficina.os.framework.idempotency.IdempotencyRecord.ProcessingStatus;
+import br.com.oficina.os.framework.idempotency.PersistentIdempotencyStore;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTest;
@@ -77,6 +79,36 @@ class PostgresAtendimentoSeedStoreTest {
         assertEquals(2, afterInboxReload.historicoSaga(ordem.ordemServicoId()).size());
         assertEquals(2, afterInboxReload.historico(ordem.ordemServicoId()).size());
         assertFalse(afterInboxReload.listarOutbox().isEmpty());
+    }
+
+    @Test
+    void devePersistirRegistrosDeIdempotenciaNoPostgreSQL() {
+        var idempotencyStore = new PersistentIdempotencyStore(dataSource);
+        var record = idempotencyStore.createProcessing(
+                "oficina-os-service:POST:/api/v1/clientes:anonymous",
+                "postgres-idempotency-001",
+                "hash-postgres-001",
+                "correlation-postgres-001",
+                "request-postgres-001",
+                OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
+
+        assertEquals(ProcessingStatus.PROCESSING, record.processingStatus());
+
+        idempotencyStore.complete(
+                record.scope(),
+                record.key(),
+                ProcessingStatus.COMPLETED,
+                201,
+                "{\"clienteId\":\"cliente-postgres-001\"}");
+
+        var reloaded = new PersistentIdempotencyStore(dataSource)
+                .find(record.scope(), record.key())
+                .orElseThrow();
+        assertEquals(ProcessingStatus.COMPLETED, reloaded.processingStatus());
+        assertEquals(201, reloaded.responseStatus());
+        assertEquals("{\"clienteId\":\"cliente-postgres-001\"}", reloaded.responseBody());
+        assertEquals("correlation-postgres-001", reloaded.correlationId());
+        assertEquals("request-postgres-001", reloaded.requestId());
     }
 
     @Test
