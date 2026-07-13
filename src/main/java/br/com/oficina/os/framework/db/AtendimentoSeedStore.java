@@ -4,6 +4,8 @@ import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeSer
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
+import br.com.oficina.os.framework.observability.OperationalMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -20,20 +22,35 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     public static final UUID SEED_ORDEM_SERVICO_ID = AtendimentoGateway.SEED_ORDEM_SERVICO_ID;
 
     private final AtendimentoGateway delegate;
+    private final OperationalMetrics metrics;
+    private final String database;
 
     @Inject
     public AtendimentoSeedStore(
             @ConfigProperty(name = "oficina.persistence.kind", defaultValue = "postgresql") String persistenceKind,
-            Instance<DataSource> dataSources) {
+            Instance<DataSource> dataSources,
+            OperationalMetrics metrics) {
         this.delegate = createDelegate(persistenceKind, dataSources);
+        this.metrics = metrics;
+        this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     public AtendimentoSeedStore() {
         this.delegate = new InMemoryAtendimentoGateway();
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.database = "memory";
+    }
+
+    AtendimentoSeedStore(String persistenceKind, Instance<DataSource> dataSources) {
+        this.delegate = createDelegate(persistenceKind, dataSources);
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     AtendimentoSeedStore(DataSource dataSource, String persistenceKind) {
         this.delegate = createDelegate(persistenceKind, dataSource);
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static AtendimentoGateway createDelegate(String persistenceKind, Instance<DataSource> dataSources) {
@@ -62,111 +79,115 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public ClienteRecord criarCliente(String nome, String documento, String telefone, String email) {
-        return delegate.criarCliente(nome, documento, telefone, email);
+        return persistence("cliente", "create", () -> delegate.criarCliente(nome, documento, telefone, email));
     }
 
     @Override
     public List<ClienteRecord> listarClientes() {
-        return delegate.listarClientes();
+        return persistence("cliente", "list", delegate::listarClientes);
     }
 
     @Override
     public ClienteRecord buscarCliente(UUID clienteId) {
-        return delegate.buscarCliente(clienteId);
+        return persistence("cliente", "find_by_id", () -> delegate.buscarCliente(clienteId));
     }
 
     @Override
     public ClienteRecord atualizarCliente(UUID clienteId, String nome, String documento, String telefone, String email) {
-        return delegate.atualizarCliente(clienteId, nome, documento, telefone, email);
+        return persistence("cliente", "update", () -> delegate.atualizarCliente(clienteId, nome, documento, telefone, email));
     }
 
     @Override
     public VeiculoRecord criarVeiculo(UUID clienteId, String placa, String marca, String modelo, int ano) {
-        return delegate.criarVeiculo(clienteId, placa, marca, modelo, ano);
+        return persistence("veiculo", "create", () -> delegate.criarVeiculo(clienteId, placa, marca, modelo, ano));
     }
 
     @Override
     public List<VeiculoRecord> listarVeiculosDoCliente(UUID clienteId) {
-        return delegate.listarVeiculosDoCliente(clienteId);
+        return persistence("veiculo", "list_by_cliente", () -> delegate.listarVeiculosDoCliente(clienteId));
     }
 
     @Override
     public VeiculoRecord buscarVeiculo(UUID veiculoId) {
-        return delegate.buscarVeiculo(veiculoId);
+        return persistence("veiculo", "find_by_id", () -> delegate.buscarVeiculo(veiculoId));
     }
 
     @Override
     public VeiculoRecord atualizarVeiculo(UUID veiculoId, String placa, String marca, String modelo, int ano) {
-        return delegate.atualizarVeiculo(veiculoId, placa, marca, modelo, ano);
+        return persistence("veiculo", "update", () -> delegate.atualizarVeiculo(veiculoId, placa, marca, modelo, ano));
     }
 
     @Override
     public OrdemServicoRecord criarOrdemServico(UUID clienteId, UUID veiculoId, String descricaoProblema) {
-        return delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema);
+        return persistence("ordem_servico", "create", () -> delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema));
     }
 
     @Override
     public List<OrdemServicoRecord> listarOrdensServico(TipoDeEstadoDaOrdemDeServico estado) {
-        return delegate.listarOrdensServico(estado);
+        return persistence("ordem_servico", "list", () -> delegate.listarOrdensServico(estado));
     }
 
     @Override
     public OrdemServicoRecord buscarOrdemServico(UUID ordemServicoId) {
-        return delegate.buscarOrdemServico(ordemServicoId);
+        return persistence("ordem_servico", "find_by_id", () -> delegate.buscarOrdemServico(ordemServicoId));
     }
 
     @Override
     public List<HistoricoRecord> historico(UUID ordemServicoId) {
-        return delegate.historico(ordemServicoId);
+        return persistence("ordem_servico_history", "list", () -> delegate.historico(ordemServicoId));
     }
 
     @Override
     public OrdemServicoRecord alterarEstado(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
-        return delegate.alterarEstado(ordemServicoId, novoEstado, motivo);
+        return persistence("ordem_servico", "update_status", () -> delegate.alterarEstado(ordemServicoId, novoEstado, motivo));
     }
 
     @Override
     public OperacaoAssincronaRecord cancelar(UUID ordemServicoId, String motivo) {
-        return delegate.cancelar(ordemServicoId, motivo);
+        return persistence("ordem_servico", "cancel", () -> delegate.cancelar(ordemServicoId, motivo));
     }
 
     @Override
     public SagaRecord buscarSaga(UUID ordemServicoId) {
-        return delegate.buscarSaga(ordemServicoId);
+        return persistence("saga", "find_by_ordem", () -> delegate.buscarSaga(ordemServicoId));
     }
 
     @Override
     public List<SagaHistoricoRecord> historicoSaga(UUID ordemServicoId) {
-        return delegate.historicoSaga(ordemServicoId);
+        return persistence("saga_history", "list", () -> delegate.historicoSaga(ordemServicoId));
     }
 
     @Override
     public List<OutboxEventRecord> listarOutbox() {
-        return delegate.listarOutbox();
+        return persistence("outbox", "list", delegate::listarOutbox);
     }
 
     @Override
     public List<OutboxEventRecord> publicarEventosPendentes() {
-        return delegate.publicarEventosPendentes();
+        return persistence("outbox", "publish_pending_local", delegate::publicarEventosPendentes);
     }
 
     @Override
     public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
-        return delegate.listarEventosPendentesParaPublicacao(limit);
+        return persistence("outbox", "list_pending", () -> delegate.listarEventosPendentesParaPublicacao(limit));
     }
 
     @Override
     public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
-        return delegate.marcarEventoPublicado(eventId);
+        return persistence("outbox", "mark_published", () -> delegate.marcarEventoPublicado(eventId));
     }
 
     @Override
     public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
-        return delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed);
+        return persistence("outbox", "mark_failure", () -> delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed));
     }
 
     @Override
     public SagaRecord consumirEvento(DomainEventEnvelope event) {
-        return delegate.consumirEvento(event);
+        return persistence("consumed_event", "consume", () -> delegate.consumirEvento(event));
+    }
+
+    private <T> T persistence(String resource, String operation, java.util.function.Supplier<T> action) {
+        return metrics.persistence(database, resource, operation, action);
     }
 }

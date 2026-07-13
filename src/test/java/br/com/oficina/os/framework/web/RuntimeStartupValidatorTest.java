@@ -15,6 +15,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 
 class RuntimeStartupValidatorTest {
+    private static final List<String> DEV_PROFILES = List.of("dev");
+    private static final List<String> PROD_PROFILES = List.of("prod");
 
     @Test
     void devePermitirMemoriaApenasEmTesteOuDesenvolvimentoLocal() {
@@ -77,28 +79,28 @@ class RuntimeStartupValidatorTest {
         unknownKind.put("oficina.observability.deployment-environment", "local");
         var kindFailure = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarConfiguracao(List.of("dev"), unknownKind));
+                () -> RuntimeStartupValidator.validarConfiguracao(DEV_PROFILES, unknownKind));
         assertTrue(kindFailure.getMessage().contains("oficina.persistence.kind deve ser postgresql ou memory"));
 
         var accessKeyOnly = validProtectedValues();
         accessKeyOnly.put("oficina.messaging.aws-access-key-id", "access-key");
         var accessKeyFailure = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarConfiguracao(List.of("prod"), accessKeyOnly));
+                () -> RuntimeStartupValidator.validarConfiguracao(PROD_PROFILES, accessKeyOnly));
         assertTrue(accessKeyFailure.getMessage().contains("credenciais AWS explícitas estão incompletas"));
 
         var secretKeyOnly = validProtectedValues();
         secretKeyOnly.put("oficina.messaging.aws-secret-access-key", "secret-key");
         var secretKeyFailure = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarConfiguracao(List.of("prod"), secretKeyOnly));
+                () -> RuntimeStartupValidator.validarConfiguracao(PROD_PROFILES, secretKeyOnly));
         assertTrue(secretKeyFailure.getMessage().contains("credenciais AWS explícitas estão incompletas"));
 
         var sessionTokenOnly = validProtectedValues();
         sessionTokenOnly.put("oficina.messaging.aws-session-token", "session-token");
         var sessionTokenFailure = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarConfiguracao(List.of("prod"), sessionTokenOnly));
+                () -> RuntimeStartupValidator.validarConfiguracao(PROD_PROFILES, sessionTokenOnly));
         assertTrue(sessionTokenFailure.getMessage().contains("credenciais AWS explícitas estão incompletas"));
 
         var temporaryCredentials = validProtectedValues();
@@ -112,14 +114,16 @@ class RuntimeStartupValidatorTest {
     void deveValidarDisponibilidadeDoPostgres() {
         assertDoesNotThrow(() -> RuntimeStartupValidator.validarPostgres(dataSource(connection(true), null)));
 
+        var invalidDataSource = dataSource(connection(false), null);
         var invalidConnection = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarPostgres(dataSource(connection(false), null)));
+                () -> RuntimeStartupValidator.validarPostgres(invalidDataSource));
         assertTrue(invalidConnection.getMessage().contains("não respondeu"));
 
+        var unavailableDataSource = dataSource(null, new SQLException("indisponível"));
         var unavailable = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarPostgres(dataSource(null, new SQLException("indisponível"))));
+                () -> RuntimeStartupValidator.validarPostgres(unavailableDataSource));
         assertTrue(unavailable.getMessage().contains("não está acessível"));
     }
 
@@ -128,7 +132,7 @@ class RuntimeStartupValidatorTest {
         values.putAll(overrides);
         var failure = assertThrows(
                 IllegalStateException.class,
-                () -> RuntimeStartupValidator.validarConfiguracao(List.of("prod"), values));
+                () -> RuntimeStartupValidator.validarConfiguracao(PROD_PROFILES, values));
         assertTrue(failure.getMessage().contains(expectedMessage), failure.getMessage());
     }
 

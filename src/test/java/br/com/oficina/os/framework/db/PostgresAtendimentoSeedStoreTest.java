@@ -164,21 +164,25 @@ class PostgresAtendimentoSeedStoreTest {
 
         assertEventosDoUsuario(criado);
 
-        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(new Usuario(
+        var administradorDuplicado = new Usuario(
                 UUID.randomUUID(),
                 new Pessoa(UUID.randomUUID(), new CpfOperacional("84191404067"), "Administrador Duplicado"),
                 UsuarioStatus.ATIVO,
-                Set.of(TipoDePapel.ADMINISTRATIVO))));
-        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(new Usuario(
+                Set.of(TipoDePapel.ADMINISTRATIVO));
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(administradorDuplicado));
+        var usuarioComIdDuplicado = new Usuario(
                 UsuarioStore.SEED_ADMIN_ID,
                 new Pessoa(UUID.randomUUID(), new CpfOperacional("12345678901"), "ID Duplicado"),
                 UsuarioStatus.ATIVO,
-                Set.of(TipoDePapel.ADMINISTRATIVO))));
-        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.atualizar(atualizado.atualizado(
+                Set.of(TipoDePapel.ADMINISTRATIVO));
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.criar(usuarioComIdDuplicado));
+        var usuarioComCpfConflitante = atualizado.atualizado(
                 new Pessoa(atualizado.pessoa().id(), new CpfOperacional("36655462007"), "CPF Conflitante"),
                 UsuarioStatus.ATIVO,
-                Set.of(TipoDePapel.MECANICO))));
-        assertThrows(UsuarioNaoEncontradoException.class, () -> usuarioStore.buscar(UUID.randomUUID()));
+                Set.of(TipoDePapel.MECANICO));
+        assertThrows(UsuarioConflitanteException.class, () -> usuarioStore.atualizar(usuarioComCpfConflitante));
+        var usuarioInexistenteId = UUID.randomUUID();
+        assertThrows(UsuarioNaoEncontradoException.class, () -> usuarioStore.buscar(usuarioInexistenteId));
 
         try (var connection = dataSource.getConnection();
                 var statement = connection.prepareStatement("""

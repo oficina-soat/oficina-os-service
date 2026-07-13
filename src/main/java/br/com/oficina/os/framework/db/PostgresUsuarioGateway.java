@@ -295,8 +295,8 @@ class PostgresUsuarioGateway implements UsuarioGateway {
         }
         try (var insert = connection.prepareStatement(
                 "INSERT INTO usuario_papel (usuario_id, papel_codigo) VALUES (?, ?)")) {
+            insert.setObject(1, usuarioId);
             for (var papel : papeis) {
-                insert.setObject(1, usuarioId);
                 insert.setString(2, papel.valor());
                 insert.addBatch();
             }

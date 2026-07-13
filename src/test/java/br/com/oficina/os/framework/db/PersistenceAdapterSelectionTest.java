@@ -21,14 +21,14 @@ class PersistenceAdapterSelectionTest {
                 usuarios.buscar(UsuarioStore.SEED_ADMIN_ID).pessoa().nome());
 
         var idempotency = new PersistentIdempotencyStore("memory", null);
-        var record = idempotency.createProcessing(
+        var idempotencyRecord = idempotency.createProcessing(
                 "scope",
                 "key",
                 "hash",
                 "correlation-id",
                 "request-id",
                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
-        assertEquals("key", record.key());
+        assertEquals("key", idempotencyRecord.key());
     }
 
     @Test

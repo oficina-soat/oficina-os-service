@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sts.StsClient;
 
@@ -47,17 +48,17 @@ public class AwsDomainMessagingClient {
             @ConfigProperty(name = "oficina.messaging.aws-access-key-id") Optional<String> accessKeyId,
             @ConfigProperty(name = "oficina.messaging.aws-secret-access-key") Optional<String> secretAccessKey,
             @ConfigProperty(name = "oficina.messaging.aws-session-token") Optional<String> sessionToken) {
-        var endpointOverride = configuredEndpointOverride.orElse("");
+        var resolvedEndpointOverride = configuredEndpointOverride.orElse("");
         this.region = region;
-        this.endpointOverride = endpointOverride;
+        this.endpointOverride = resolvedEndpointOverride;
         this.configuredAccountId = configuredAccountId.orElse("");
         var credentialsProvider = credentialsProvider(
                 accessKeyId.orElse(""),
                 secretAccessKey.orElse(""),
                 sessionToken.orElse(""),
-                endpointOverride);
-        this.snsClient = snsClient(region, endpointOverride, credentialsProvider);
-        this.sqsClient = sqsClient(region, endpointOverride, credentialsProvider);
+                resolvedEndpointOverride);
+        this.snsClient = snsClient(region, resolvedEndpointOverride, credentialsProvider);
+        this.sqsClient = sqsClient(region, resolvedEndpointOverride, credentialsProvider);
         this.stsClient = stsClient(region, credentialsProvider);
         if (!DomainMessagingRoutes.SERVICE_NAME.equals(applicationName)) {
             throw new IllegalStateException("Servico de mensageria configurado com nome invalido: " + applicationName);
@@ -79,6 +80,7 @@ public class AwsDomainMessagingClient {
                 .queueUrl(queueUrl)
                 .maxNumberOfMessages(Math.clamp(maxMessages, 1, 10))
                 .waitTimeSeconds(Math.clamp(waitTimeSeconds, 0, 20))
+                .messageSystemAttributeNames(MessageSystemAttributeName.APPROXIMATE_RECEIVE_COUNT)
                 .build();
         return new ReceivedMessages(queueUrl, sqsClient.receiveMessage(request).messages());
     }

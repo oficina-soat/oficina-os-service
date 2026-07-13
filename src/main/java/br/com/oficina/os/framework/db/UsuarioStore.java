@@ -2,6 +2,8 @@ package br.com.oficina.os.framework.db;
 
 import br.com.oficina.os.core.entities.usuario.Usuario;
 import br.com.oficina.os.core.interfaces.gateway.UsuarioGateway;
+import br.com.oficina.os.framework.observability.OperationalMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -17,20 +19,29 @@ public class UsuarioStore implements UsuarioGateway {
     public static final UUID SEED_RECEPCIONISTA_ID = UUID.fromString("20000000-0000-4000-8000-000000000003");
 
     private final UsuarioGateway delegate;
+    private final OperationalMetrics metrics;
+    private final String database;
 
     @Inject
     public UsuarioStore(
             @ConfigProperty(name = "oficina.persistence.kind", defaultValue = "postgresql") String persistenceKind,
-            Instance<DataSource> dataSources) {
+            Instance<DataSource> dataSources,
+            OperationalMetrics metrics) {
         this.delegate = createDelegate(persistenceKind, dataSources);
+        this.metrics = metrics;
+        this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     public UsuarioStore() {
         this.delegate = new InMemoryUsuarioGateway();
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.database = "memory";
     }
 
     UsuarioStore(DataSource dataSource, String persistenceKind) {
         this.delegate = createDelegate(persistenceKind, dataSource);
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static UsuarioGateway createDelegate(String persistenceKind, Instance<DataSource> dataSources) {
@@ -59,26 +70,26 @@ public class UsuarioStore implements UsuarioGateway {
 
     @Override
     public Usuario criar(Usuario usuario) {
-        return delegate.criar(usuario);
+        return metrics.persistence(database, "usuario", "create", () -> delegate.criar(usuario));
     }
 
     @Override
     public List<Usuario> listar() {
-        return delegate.listar();
+        return metrics.persistence(database, "usuario", "list", delegate::listar);
     }
 
     @Override
     public Usuario buscar(UUID usuarioId) {
-        return delegate.buscar(usuarioId);
+        return metrics.persistence(database, "usuario", "find_by_id", () -> delegate.buscar(usuarioId));
     }
 
     @Override
     public Usuario atualizar(Usuario usuario) {
-        return delegate.atualizar(usuario);
+        return metrics.persistence(database, "usuario", "update", () -> delegate.atualizar(usuario));
     }
 
     @Override
     public void inativar(UUID usuarioId) {
-        delegate.inativar(usuarioId);
+        metrics.persistence(database, "usuario", "deactivate", () -> delegate.inativar(usuarioId));
     }
 }

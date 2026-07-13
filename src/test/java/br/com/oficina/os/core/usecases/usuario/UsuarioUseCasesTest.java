@@ -50,18 +50,24 @@ class UsuarioUseCasesTest {
     void deveRejeitarEntradasInvalidas() {
         var useCase = new CriarUsuarioUseCase(new FakeUsuarioGateway());
 
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                " ", "84191404067", "ATIVO", List.of("mecanico"))));
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                "Ana", "123", "ATIVO", List.of("mecanico"))));
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                "Ana", "84191404067", "SUSPENSO", List.of("mecanico"))));
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                "Ana", "84191404067", "ATIVO", List.of())));
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                "Ana", "84191404067", "ATIVO", List.of("mecanico", "mecanico"))));
-        assertThrows(IllegalArgumentException.class, () -> useCase.executar(new CriarUsuarioUseCase.Command(
-                "Ana", "84191404067", "ATIVO", List.of("financeiro"))));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                " ", "84191404067", "ATIVO", List.of("mecanico")));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                "Ana", "123", "ATIVO", List.of("mecanico")));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                "Ana", "84191404067", "SUSPENSO", List.of("mecanico")));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                "Ana", "84191404067", "ATIVO", List.of()));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                "Ana", "84191404067", "ATIVO", List.of("mecanico", "mecanico")));
+        assertEntradaInvalida(useCase, new CriarUsuarioUseCase.Command(
+                "Ana", "84191404067", "ATIVO", List.of("financeiro")));
+    }
+
+    private static void assertEntradaInvalida(
+            CriarUsuarioUseCase useCase,
+            CriarUsuarioUseCase.Command command) {
+        assertThrows(IllegalArgumentException.class, () -> useCase.executar(command));
     }
 
     private static final class FakeUsuarioGateway implements UsuarioGateway {
@@ -89,8 +95,7 @@ class UsuarioUseCasesTest {
 
         @Override
         public Usuario atualizar(Usuario usuario) {
-            usuarios.put(usuario.id(), usuario);
-            return usuario;
+            return criar(usuario);
         }
 
         @Override
