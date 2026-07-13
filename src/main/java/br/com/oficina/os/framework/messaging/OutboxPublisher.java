@@ -3,6 +3,8 @@ package br.com.oficina.os.framework.messaging;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import br.com.oficina.os.core.usecases.outbox.PublicarEventosPendentesUseCase;
+import br.com.oficina.os.framework.observability.OperationalMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.time.OffsetDateTime;
@@ -10,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -21,10 +24,32 @@ public class OutboxPublisher {
     private final PublicarEventosPendentesUseCase publicarEventosPendentes;
     private final AwsDomainMessagingClient messagingClient;
     private final DomainEventJsonCodec codec;
+    private final OperationalMetrics metrics;
     private final boolean publisherEnabled;
     private final int batchSize;
     private final int maxAttempts;
     private final long backoffBaseMs;
+
+    public OutboxPublisher(
+            AtendimentoGateway gateway,
+            PublicarEventosPendentesUseCase publicarEventosPendentes,
+            AwsDomainMessagingClient messagingClient,
+            DomainEventJsonCodec codec,
+            @ConfigProperty(name = "oficina.messaging.publisher.enabled", defaultValue = "false") boolean publisherEnabled,
+            @ConfigProperty(name = "oficina.messaging.publisher.batch-size", defaultValue = "10") int batchSize,
+            @ConfigProperty(name = "oficina.messaging.publisher.max-attempts", defaultValue = "5") int maxAttempts,
+            @ConfigProperty(name = "oficina.messaging.publisher.backoff-base-ms", defaultValue = "1000") long backoffBaseMs) {
+        this(
+                gateway,
+                publicarEventosPendentes,
+                messagingClient,
+                codec,
+                publisherEnabled,
+                batchSize,
+                maxAttempts,
+                backoffBaseMs,
+                new OperationalMetrics(new SimpleMeterRegistry(), DomainMessagingRoutes.SERVICE_NAME));
+    }
 
     @Inject
     public OutboxPublisher(
@@ -35,7 +60,8 @@ public class OutboxPublisher {
             @ConfigProperty(name = "oficina.messaging.publisher.enabled", defaultValue = "false") boolean publisherEnabled,
             @ConfigProperty(name = "oficina.messaging.publisher.batch-size", defaultValue = "10") int batchSize,
             @ConfigProperty(name = "oficina.messaging.publisher.max-attempts", defaultValue = "5") int maxAttempts,
-            @ConfigProperty(name = "oficina.messaging.publisher.backoff-base-ms", defaultValue = "1000") long backoffBaseMs) {
+            @ConfigProperty(name = "oficina.messaging.publisher.backoff-base-ms", defaultValue = "1000") long backoffBaseMs,
+            OperationalMetrics metrics) {
         this.gateway = gateway;
         this.publicarEventosPendentes = publicarEventosPendentes;
         this.messagingClient = messagingClient;
@@ -44,17 +70,22 @@ public class OutboxPublisher {
         this.batchSize = batchSize;
         this.maxAttempts = maxAttempts;
         this.backoffBaseMs = backoffBaseMs;
+        this.metrics = metrics;
     }
 
     public List<OutboxEventRecord> publicarPendentes() {
+        observeBacklog();
         if (!publisherEnabled) {
             return publicarEventosPendentes.executar().join();
         }
         var publicados = new ArrayList<OutboxEventRecord>();
         for (var event : gateway.listarEventosPendentesParaPublicacao(batchSize)) {
+            var startedAt = metrics.startOutboxAttempt(event.eventType(), event.topic());
             try {
                 publicar(event);
-                publicados.add(gateway.marcarEventoPublicado(event.eventId()));
+                var published = gateway.marcarEventoPublicado(event.eventId());
+                metrics.outboxPublished(event.eventType(), event.topic(), startedAt);
+                publicados.add(published);
             } catch (RuntimeException exception) {
                 var attempts = event.attempts() + 1;
                 var failed = attempts >= maxAttempts;
@@ -63,10 +94,22 @@ public class OutboxPublisher {
                         rootMessage(exception),
                         nextAttempt(attempts),
                         failed);
+                metrics.outboxFailed(event.eventType(), event.topic(), failureReason(exception));
                 LOG.warnf(exception, "Falha ao publicar evento %s no topico %s", event.eventId(), event.topic());
             }
         }
         return List.copyOf(publicados);
+    }
+
+    private void observeBacklog() {
+        var pending = gateway.listarOutbox().stream()
+                .filter(event -> "PENDING".equals(event.status()))
+                .toList();
+        metrics.observeOutbox(
+                pending.stream().collect(Collectors.groupingBy(
+                        OutboxEventRecord::eventType,
+                        Collectors.counting())),
+                pending.stream().map(OutboxEventRecord::createdAt).min(OffsetDateTime::compareTo).orElse(null));
     }
 
     private void publicar(OutboxEventRecord event) {
@@ -96,5 +139,9 @@ public class OutboxPublisher {
             current = current.getCause();
         }
         return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    }
+
+    private static String failureReason(RuntimeException exception) {
+        return exception instanceof IllegalArgumentException ? "invalid_route" : "publish_failure";
     }
 }
