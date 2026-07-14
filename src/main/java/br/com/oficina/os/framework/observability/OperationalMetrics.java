@@ -22,6 +22,8 @@ public class OperationalMetrics {
     private static final String TAG_TOPIC = "topic";
     private static final String TAG_OPERATION = "operation";
     private static final String TAG_EVENT_TYPE = "eventType";
+    private static final String TAG_SAGA_TYPE = "sagaType";
+    private static final String TAG_STEP = "step";
     private final MeterRegistry registry;
     private final String service;
     private final Map<String, AtomicLong> pendingByEventType = new ConcurrentHashMap<>();
@@ -118,6 +120,28 @@ public class OperationalMetrics {
                 .increment();
     }
 
+    public void sagaStarted(String sagaType, String step) {
+        var tags = sagaTags(sagaType);
+        registry.counter("saga.instances.started.count", tags).increment();
+        registry.timer("saga.step.duration", tags.and(TAG_STEP, step)).record(Duration.ZERO);
+    }
+
+    public void sagaTransition(String sagaType, String step, String outcome, String reason, Duration duration) {
+        var tags = sagaTags(sagaType);
+        registry.timer("saga.step.duration", tags.and(TAG_STEP, step))
+                .record(duration.isNegative() ? Duration.ZERO : duration);
+        switch (outcome) {
+            case "completed" -> registry.counter("saga.instances.completed.count", tags).increment();
+            case "compensated" -> registry.counter(
+                            "saga.instances.compensated.count", tags.and(TAG_REASON, reason))
+                    .increment();
+            case "failed" -> registry.counter("saga.instances.failed.count", tags.and(TAG_REASON, reason)).increment();
+            default -> {
+                // Non-terminal transition: only the step duration is recorded.
+            }
+        }
+    }
+
     private void recordPersistence(
             String database, String resource, String operation, String result, String error, long startedAt) {
         var tags = Tags.of(
@@ -149,6 +173,10 @@ public class OperationalMetrics {
 
     private Tags messagingTags(String eventType, String topic) {
         return Tags.of(TAG_SERVICE, service, TAG_EVENT_TYPE, eventType, TAG_TOPIC, topic);
+    }
+
+    private Tags sagaTags(String sagaType) {
+        return Tags.of(TAG_SERVICE, service, TAG_SAGA_TYPE, sagaType);
     }
 
     private String categorize(RuntimeException exception) {
