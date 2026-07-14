@@ -14,6 +14,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class UsuarioStore implements UsuarioGateway {
+    private static final String SERVICE_NAME = "oficina-os-service";
+    private static final String MEMORY = "memory";
+    private static final String USUARIO = "usuario";
     public static final UUID SEED_ADMIN_ID = UUID.fromString("20000000-0000-4000-8000-000000000001");
     public static final UUID SEED_MECANICO_ID = UUID.fromString("20000000-0000-4000-8000-000000000002");
     public static final UUID SEED_RECEPCIONISTA_ID = UUID.fromString("20000000-0000-4000-8000-000000000003");
@@ -34,18 +37,18 @@ public class UsuarioStore implements UsuarioGateway {
 
     public UsuarioStore() {
         this.delegate = new InMemoryUsuarioGateway();
-        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
-        this.database = "memory";
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
+        this.database = MEMORY;
     }
 
     UsuarioStore(DataSource dataSource, String persistenceKind) {
         this.delegate = createDelegate(persistenceKind, dataSource);
-        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static UsuarioGateway createDelegate(String persistenceKind, Instance<DataSource> dataSources) {
-        if ("memory".equalsIgnoreCase(persistenceKind)) {
+        if (MEMORY.equalsIgnoreCase(persistenceKind)) {
             return new InMemoryUsuarioGateway();
         }
         if ("postgresql".equalsIgnoreCase(persistenceKind)) {
@@ -55,7 +58,7 @@ public class UsuarioStore implements UsuarioGateway {
     }
 
     private static UsuarioGateway createDelegate(String persistenceKind, DataSource dataSource) {
-        if ("memory".equalsIgnoreCase(persistenceKind)) {
+        if (MEMORY.equalsIgnoreCase(persistenceKind)) {
             return new InMemoryUsuarioGateway();
         }
         if ("postgresql".equalsIgnoreCase(persistenceKind)) {
@@ -70,26 +73,26 @@ public class UsuarioStore implements UsuarioGateway {
 
     @Override
     public Usuario criar(Usuario usuario) {
-        return metrics.persistence(database, "usuario", "create", () -> delegate.criar(usuario));
+        return metrics.persistence(database, USUARIO, "create", () -> delegate.criar(usuario));
     }
 
     @Override
     public List<Usuario> listar() {
-        return metrics.persistence(database, "usuario", "list", delegate::listar);
+        return metrics.persistence(database, USUARIO, "list", delegate::listar);
     }
 
     @Override
     public Usuario buscar(UUID usuarioId) {
-        return metrics.persistence(database, "usuario", "find_by_id", () -> delegate.buscar(usuarioId));
+        return metrics.persistence(database, USUARIO, "find_by_id", () -> delegate.buscar(usuarioId));
     }
 
     @Override
     public Usuario atualizar(Usuario usuario) {
-        return metrics.persistence(database, "usuario", "update", () -> delegate.atualizar(usuario));
+        return metrics.persistence(database, USUARIO, "update", () -> delegate.atualizar(usuario));
     }
 
     @Override
     public void inativar(UUID usuarioId) {
-        metrics.persistence(database, "usuario", "deactivate", () -> delegate.inativar(usuarioId));
+        metrics.persistence(database, USUARIO, "deactivate", () -> delegate.inativar(usuarioId));
     }
 }

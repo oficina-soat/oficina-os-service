@@ -17,6 +17,14 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class AtendimentoSeedStore implements AtendimentoGateway {
+    private static final String SERVICE_NAME = "oficina-os-service";
+    private static final String MEMORY = "memory";
+    private static final String CREATE = "create";
+    private static final String FIND_BY_ID = "find_by_id";
+    private static final String CLIENTE = "cliente";
+    private static final String VEICULO = "veiculo";
+    private static final String ORDEM_SERVICO = "ordem_servico";
+    private static final String OUTBOX = "outbox";
     public static final UUID SEED_CLIENTE_ID = AtendimentoGateway.SEED_CLIENTE_ID;
     public static final UUID SEED_VEICULO_ID = AtendimentoGateway.SEED_VEICULO_ID;
     public static final UUID SEED_ORDEM_SERVICO_ID = AtendimentoGateway.SEED_ORDEM_SERVICO_ID;
@@ -37,24 +45,24 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     public AtendimentoSeedStore() {
         this.delegate = new InMemoryAtendimentoGateway();
-        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
-        this.database = "memory";
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
+        this.database = MEMORY;
     }
 
     AtendimentoSeedStore(String persistenceKind, Instance<DataSource> dataSources) {
         this.delegate = createDelegate(persistenceKind, dataSources);
-        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     AtendimentoSeedStore(DataSource dataSource, String persistenceKind) {
         this.delegate = createDelegate(persistenceKind, dataSource);
-        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), "oficina-os-service");
+        this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     private static AtendimentoGateway createDelegate(String persistenceKind, Instance<DataSource> dataSources) {
-        if ("memory".equalsIgnoreCase(persistenceKind)) {
+        if (MEMORY.equalsIgnoreCase(persistenceKind)) {
             return new InMemoryAtendimentoGateway();
         }
         if ("postgresql".equalsIgnoreCase(persistenceKind)) {
@@ -64,7 +72,7 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     }
 
     private static AtendimentoGateway createDelegate(String persistenceKind, DataSource dataSource) {
-        if ("memory".equalsIgnoreCase(persistenceKind)) {
+        if (MEMORY.equalsIgnoreCase(persistenceKind)) {
             return new InMemoryAtendimentoGateway();
         }
         if ("postgresql".equalsIgnoreCase(persistenceKind)) {
@@ -79,57 +87,57 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public ClienteRecord criarCliente(String nome, String documento, String telefone, String email) {
-        return persistence("cliente", "create", () -> delegate.criarCliente(nome, documento, telefone, email));
+        return persistence(CLIENTE, CREATE, () -> delegate.criarCliente(nome, documento, telefone, email));
     }
 
     @Override
     public List<ClienteRecord> listarClientes() {
-        return persistence("cliente", "list", delegate::listarClientes);
+        return persistence(CLIENTE, "list", delegate::listarClientes);
     }
 
     @Override
     public ClienteRecord buscarCliente(UUID clienteId) {
-        return persistence("cliente", "find_by_id", () -> delegate.buscarCliente(clienteId));
+        return persistence(CLIENTE, FIND_BY_ID, () -> delegate.buscarCliente(clienteId));
     }
 
     @Override
     public ClienteRecord atualizarCliente(UUID clienteId, String nome, String documento, String telefone, String email) {
-        return persistence("cliente", "update", () -> delegate.atualizarCliente(clienteId, nome, documento, telefone, email));
+        return persistence(CLIENTE, "update", () -> delegate.atualizarCliente(clienteId, nome, documento, telefone, email));
     }
 
     @Override
     public VeiculoRecord criarVeiculo(UUID clienteId, String placa, String marca, String modelo, int ano) {
-        return persistence("veiculo", "create", () -> delegate.criarVeiculo(clienteId, placa, marca, modelo, ano));
+        return persistence(VEICULO, CREATE, () -> delegate.criarVeiculo(clienteId, placa, marca, modelo, ano));
     }
 
     @Override
     public List<VeiculoRecord> listarVeiculosDoCliente(UUID clienteId) {
-        return persistence("veiculo", "list_by_cliente", () -> delegate.listarVeiculosDoCliente(clienteId));
+        return persistence(VEICULO, "list_by_cliente", () -> delegate.listarVeiculosDoCliente(clienteId));
     }
 
     @Override
     public VeiculoRecord buscarVeiculo(UUID veiculoId) {
-        return persistence("veiculo", "find_by_id", () -> delegate.buscarVeiculo(veiculoId));
+        return persistence(VEICULO, FIND_BY_ID, () -> delegate.buscarVeiculo(veiculoId));
     }
 
     @Override
     public VeiculoRecord atualizarVeiculo(UUID veiculoId, String placa, String marca, String modelo, int ano) {
-        return persistence("veiculo", "update", () -> delegate.atualizarVeiculo(veiculoId, placa, marca, modelo, ano));
+        return persistence(VEICULO, "update", () -> delegate.atualizarVeiculo(veiculoId, placa, marca, modelo, ano));
     }
 
     @Override
     public OrdemServicoRecord criarOrdemServico(UUID clienteId, UUID veiculoId, String descricaoProblema) {
-        return persistence("ordem_servico", "create", () -> delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema));
+        return persistence(ORDEM_SERVICO, CREATE, () -> delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema));
     }
 
     @Override
     public List<OrdemServicoRecord> listarOrdensServico(TipoDeEstadoDaOrdemDeServico estado) {
-        return persistence("ordem_servico", "list", () -> delegate.listarOrdensServico(estado));
+        return persistence(ORDEM_SERVICO, "list", () -> delegate.listarOrdensServico(estado));
     }
 
     @Override
     public OrdemServicoRecord buscarOrdemServico(UUID ordemServicoId) {
-        return persistence("ordem_servico", "find_by_id", () -> delegate.buscarOrdemServico(ordemServicoId));
+        return persistence(ORDEM_SERVICO, FIND_BY_ID, () -> delegate.buscarOrdemServico(ordemServicoId));
     }
 
     @Override
@@ -139,12 +147,12 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public OrdemServicoRecord alterarEstado(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
-        return persistence("ordem_servico", "update_status", () -> delegate.alterarEstado(ordemServicoId, novoEstado, motivo));
+        return persistence(ORDEM_SERVICO, "update_status", () -> delegate.alterarEstado(ordemServicoId, novoEstado, motivo));
     }
 
     @Override
     public OperacaoAssincronaRecord cancelar(UUID ordemServicoId, String motivo) {
-        return persistence("ordem_servico", "cancel", () -> delegate.cancelar(ordemServicoId, motivo));
+        return persistence(ORDEM_SERVICO, "cancel", () -> delegate.cancelar(ordemServicoId, motivo));
     }
 
     @Override
@@ -159,27 +167,27 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public List<OutboxEventRecord> listarOutbox() {
-        return persistence("outbox", "list", delegate::listarOutbox);
+        return persistence(OUTBOX, "list", delegate::listarOutbox);
     }
 
     @Override
     public List<OutboxEventRecord> publicarEventosPendentes() {
-        return persistence("outbox", "publish_pending_local", delegate::publicarEventosPendentes);
+        return persistence(OUTBOX, "publish_pending_local", delegate::publicarEventosPendentes);
     }
 
     @Override
     public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
-        return persistence("outbox", "list_pending", () -> delegate.listarEventosPendentesParaPublicacao(limit));
+        return persistence(OUTBOX, "list_pending", () -> delegate.listarEventosPendentesParaPublicacao(limit));
     }
 
     @Override
     public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
-        return persistence("outbox", "mark_published", () -> delegate.marcarEventoPublicado(eventId));
+        return persistence(OUTBOX, "mark_published", () -> delegate.marcarEventoPublicado(eventId));
     }
 
     @Override
     public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
-        return persistence("outbox", "mark_failure", () -> delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed));
+        return persistence(OUTBOX, "mark_failure", () -> delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed));
     }
 
     @Override
