@@ -2,12 +2,19 @@ package br.com.oficina.os.framework.messaging;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
+import io.quarkus.runtime.Startup;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DomainMessagingWorkerTest {
+
+    @Test
+    void deveSerInicializadoNoStartupDaAplicacao() {
+        assertTrue(DomainMessagingWorker.class.isAnnotationPresent(Startup.class));
+    }
 
     @Test
     void naoDeveIniciarExecutorQuandoWorkerEstiverDesabilitado() {
