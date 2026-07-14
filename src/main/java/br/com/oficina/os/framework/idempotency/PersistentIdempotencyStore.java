@@ -13,6 +13,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class PersistentIdempotencyStore implements IdempotencyStore {
+    private static final String IDEMPOTENCY = "idempotency";
     private final IdempotencyStore delegate;
     private final OperationalMetrics metrics;
     private final String database;
@@ -52,7 +53,7 @@ public class PersistentIdempotencyStore implements IdempotencyStore {
 
     @Override
     public Optional<IdempotencyRecord> find(String scope, String key) {
-        return metrics.persistence(database, "idempotency", "find", () -> delegate.find(scope, key));
+        return metrics.persistence(database, IDEMPOTENCY, "find", () -> delegate.find(scope, key));
     }
 
     @Override
@@ -65,7 +66,7 @@ public class PersistentIdempotencyStore implements IdempotencyStore {
             OffsetDateTime expiresAt) {
         return metrics.persistence(
                 database,
-                "idempotency",
+                IDEMPOTENCY,
                 "create_processing",
                 () -> delegate.createProcessing(scope, key, requestHash, correlationId, requestId, expiresAt));
     }
@@ -79,7 +80,7 @@ public class PersistentIdempotencyStore implements IdempotencyStore {
             String responseBody) {
         metrics.persistence(
                 database,
-                "idempotency",
+                IDEMPOTENCY,
                 "complete",
                 () -> delegate.complete(scope, key, processingStatus, responseStatus, responseBody));
     }

@@ -30,6 +30,7 @@ public class OutboxPublisher {
     private final int maxAttempts;
     private final long backoffBaseMs;
 
+    @SuppressWarnings("java:S107")
     public OutboxPublisher(
             AtendimentoGateway gateway,
             PublicarEventosPendentesUseCase publicarEventosPendentes,
@@ -52,6 +53,7 @@ public class OutboxPublisher {
     }
 
     @Inject
+    @SuppressWarnings("java:S107")
     public OutboxPublisher(
             AtendimentoGateway gateway,
             PublicarEventosPendentesUseCase publicarEventosPendentes,
