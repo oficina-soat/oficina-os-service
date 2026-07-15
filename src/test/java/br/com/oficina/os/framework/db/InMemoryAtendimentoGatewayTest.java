@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ClienteSearchCriteria;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
@@ -36,6 +37,10 @@ class InMemoryAtendimentoGatewayTest {
         var cliente = gateway.criarCliente("  Ana Souza  ", "84191404067", "  ", "ana@example.com");
         assertEquals("Ana Souza", cliente.nome());
         assertNull(cliente.telefone());
+        assertEquals(1, gateway.listarClientes(new ClienteSearchCriteria("ana sou", null, null)).size());
+        assertEquals(1, gateway.listarClientes(new ClienteSearchCriteria(null, "84191404067", null)).size());
+        assertEquals(1, gateway.listarClientes(new ClienteSearchCriteria(null, null, "ANA@EXAMPLE")).size());
+        assertTrue(gateway.listarClientes(new ClienteSearchCriteria("inexistente", null, null)).isEmpty());
 
         var clienteAtualizado = gateway.atualizarCliente(
                 cliente.clienteId(),

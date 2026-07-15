@@ -15,7 +15,11 @@ public interface AtendimentoGateway {
 
     ClienteRecord criarCliente(String nome, String documento, String telefone, String email);
 
-    List<ClienteRecord> listarClientes();
+    default List<ClienteRecord> listarClientes() {
+        return listarClientes(new ClienteSearchCriteria(null, null, null));
+    }
+
+    List<ClienteRecord> listarClientes(ClienteSearchCriteria criteria);
 
     ClienteRecord buscarCliente(UUID clienteId);
 
@@ -65,6 +69,18 @@ public interface AtendimentoGateway {
             String email,
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm) {
+    }
+
+    record ClienteSearchCriteria(String nome, String documento, String email) {
+        public ClienteSearchCriteria {
+            nome = normalizar(nome);
+            documento = normalizar(documento);
+            email = normalizar(email);
+        }
+
+        private static String normalizar(String value) {
+            return value == null || value.isBlank() ? null : value.trim();
+        }
     }
 
     record VeiculoRecord(

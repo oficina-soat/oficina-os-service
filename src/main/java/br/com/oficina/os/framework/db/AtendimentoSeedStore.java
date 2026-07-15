@@ -99,8 +99,8 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     }
 
     @Override
-    public List<ClienteRecord> listarClientes() {
-        return persistence(CLIENTE, "list", delegate::listarClientes);
+    public List<ClienteRecord> listarClientes(ClienteSearchCriteria criteria) {
+        return persistence(CLIENTE, "list", () -> delegate.listarClientes(criteria));
     }
 
     @Override

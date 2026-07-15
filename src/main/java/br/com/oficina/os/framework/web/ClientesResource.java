@@ -51,8 +51,11 @@ public class ClientesResource {
     @GET
     public Uni<PageResponse<ClienteViewModel>> consultarClientes(
             @QueryParam("page") Integer page,
-            @QueryParam("size") Integer size) {
-        return Uni.createFrom().completionStage(clientesController.consultarClientes(page, size));
+            @QueryParam("size") Integer size,
+            @QueryParam("nome") String nome,
+            @QueryParam("documento") String documento,
+            @QueryParam("email") String email) {
+        return Uni.createFrom().completionStage(clientesController.consultarClientes(page, size, nome, documento, email));
     }
 
     @GET
