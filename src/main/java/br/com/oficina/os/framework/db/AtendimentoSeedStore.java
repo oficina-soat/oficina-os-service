@@ -5,6 +5,7 @@ import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import br.com.oficina.os.framework.observability.OperationalMetrics;
+import br.com.oficina.os.framework.observability.SagaObservability;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -18,47 +19,54 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class AtendimentoSeedStore implements AtendimentoGateway {
     private static final String SERVICE_NAME = "oficina-os-service";
-    private static final String MEMORY = "memory";
-    private static final String CREATE = "create";
-    private static final String FIND_BY_ID = "find_by_id";
-    private static final String CLIENTE = "cliente";
-    private static final String VEICULO = "veiculo";
-    private static final String ORDEM_SERVICO = "ordem_servico";
-    private static final String OUTBOX = "outbox";
+    private static final String MEMORY = "memory", CREATE = "create", FIND_BY_ID = "find_by_id";
+    private static final String CLIENTE = "cliente", VEICULO = "veiculo", ORDEM_SERVICO = "ordem_servico", OUTBOX = "outbox";
     public static final UUID SEED_CLIENTE_ID = AtendimentoGateway.SEED_CLIENTE_ID;
     public static final UUID SEED_VEICULO_ID = AtendimentoGateway.SEED_VEICULO_ID;
     public static final UUID SEED_ORDEM_SERVICO_ID = AtendimentoGateway.SEED_ORDEM_SERVICO_ID;
 
     private final AtendimentoGateway delegate;
     private final OperationalMetrics metrics;
+    private final SagaObservability sagaObservability;
     private final String database;
-
     @Inject
     public AtendimentoSeedStore(
             @ConfigProperty(name = "oficina.persistence.kind", defaultValue = "postgresql") String persistenceKind,
             Instance<DataSource> dataSources,
-            OperationalMetrics metrics) {
+            OperationalMetrics metrics,
+            SagaObservability sagaObservability) {
         this.delegate = createDelegate(persistenceKind, dataSources);
         this.metrics = metrics;
+        this.sagaObservability = sagaObservability;
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     public AtendimentoSeedStore() {
         this.delegate = new InMemoryAtendimentoGateway();
         this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
+        this.sagaObservability = new SagaObservability(metrics);
         this.database = MEMORY;
     }
 
     AtendimentoSeedStore(String persistenceKind, Instance<DataSource> dataSources) {
         this.delegate = createDelegate(persistenceKind, dataSources);
         this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
+        this.sagaObservability = new SagaObservability(metrics);
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
 
     AtendimentoSeedStore(DataSource dataSource, String persistenceKind) {
         this.delegate = createDelegate(persistenceKind, dataSource);
         this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
+        this.sagaObservability = new SagaObservability(metrics);
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    AtendimentoSeedStore(AtendimentoGateway delegate, OperationalMetrics metrics, String database) {
+        this.delegate = delegate;
+        this.metrics = metrics;
+        this.sagaObservability = new SagaObservability(metrics);
+        this.database = database;
     }
 
     private static AtendimentoGateway createDelegate(String persistenceKind, Instance<DataSource> dataSources) {
@@ -127,7 +135,9 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public OrdemServicoRecord criarOrdemServico(UUID clienteId, UUID veiculoId, String descricaoProblema) {
-        return persistence(ORDEM_SERVICO, CREATE, () -> delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema));
+        var ordem = persistence(ORDEM_SERVICO, CREATE, () -> delegate.criarOrdemServico(clienteId, veiculoId, descricaoProblema));
+        sagaObservability.observe(null, delegate.buscarSaga(ordem.ordemServicoId()));
+        return ordem;
     }
 
     @Override
@@ -147,12 +157,18 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public OrdemServicoRecord alterarEstado(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
-        return persistence(ORDEM_SERVICO, "update_status", () -> delegate.alterarEstado(ordemServicoId, novoEstado, motivo));
+        var previous = delegate.buscarSaga(ordemServicoId);
+        var ordem = persistence(ORDEM_SERVICO, "update_status", () -> delegate.alterarEstado(ordemServicoId, novoEstado, motivo));
+        sagaObservability.observe(previous, delegate.buscarSaga(ordemServicoId));
+        return ordem;
     }
 
     @Override
     public OperacaoAssincronaRecord cancelar(UUID ordemServicoId, String motivo) {
-        return persistence(ORDEM_SERVICO, "cancel", () -> delegate.cancelar(ordemServicoId, motivo));
+        var previous = delegate.buscarSaga(ordemServicoId);
+        var operacao = persistence(ORDEM_SERVICO, "cancel", () -> delegate.cancelar(ordemServicoId, motivo));
+        sagaObservability.observe(previous, delegate.buscarSaga(ordemServicoId));
+        return operacao;
     }
 
     @Override
@@ -192,7 +208,10 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public SagaRecord consumirEvento(DomainEventEnvelope event) {
-        return persistence("consumed_event", "consume", () -> delegate.consumirEvento(event));
+        var previous = delegate.buscarSaga(event.aggregateId());
+        var current = persistence("consumed_event", "consume", () -> delegate.consumirEvento(event));
+        sagaObservability.observe(previous, current);
+        return current;
     }
 
     private <T> T persistence(String resource, String operation, java.util.function.Supplier<T> action) {

@@ -26,6 +26,8 @@ O `oficina-os-service` é o orquestrador porque mantém o ciclo de vida global d
 
 Os serviços participantes preservam seus próprios bancos e regras de domínio. Este serviço coordena comandos idempotentes e consome eventos de Billing e Execution para atualizar a Saga, publicar `sagaFinalizadaComSucesso` ou executar compensações que resultem em `sagaCompensada`.
 
+A orquestração expõe em `/q/metrics` os contadores `saga.instances.started.count`, `saga.instances.completed.count`, `saga.instances.compensated.count` e `saga.instances.failed.count`, além do histograma `saga.step.duration`. As dimensões ficam limitadas a `service`, `sagaType`, `step` e `reason` categórico. Logs e spans de transição recebem `sagaId`, `sagaStep`, estado da Saga, `ordemServicoId` e `correlationId`, sem usar identificadores como tags de métricas.
+
 ## Stack
 
 - Java 25

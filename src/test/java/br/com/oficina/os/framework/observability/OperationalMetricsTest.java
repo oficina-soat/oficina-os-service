@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,6 +118,41 @@ class OperationalMetricsTest {
                 .tags("operation", "post", "reason", "payload_mismatch")
                 .counter()
                 .count());
+    }
+
+    @Test
+    void deveRegistrarCicloDeVidaEDuracaoDaSagaComDimensoesCategoricas() {
+        metrics.sagaStarted("ordemServico", "ordemDeServicoCriada");
+        metrics.sagaTransition(
+                "ordemServico", "diagnosticoIniciado", "in_progress", "none", Duration.ofSeconds(3));
+        metrics.sagaTransition(
+                "ordemServico", "sagaFinalizadaComSucesso", "completed", "none", Duration.ofSeconds(5));
+        metrics.sagaTransition(
+                "ordemServico", "sagaCompensada", "compensated", "operational_failure", Duration.ofSeconds(2));
+        metrics.sagaTransition(
+                "ordemServico", "falhaManual", "failed", "manual_failure", Duration.ofSeconds(1));
+
+        assertEquals(1, registry.get("saga.instances.started.count")
+                .tags("service", "oficina-os-service", "sagaType", "ordemServico")
+                .counter()
+                .count());
+        assertEquals(1, registry.get("saga.instances.completed.count").counter().count());
+        assertEquals(1, registry.get("saga.instances.compensated.count")
+                .tag("reason", "operational_failure")
+                .counter()
+                .count());
+        assertEquals(1, registry.get("saga.instances.failed.count")
+                .tag("reason", "manual_failure")
+                .counter()
+                .count());
+        assertEquals(1, registry.get("saga.step.duration")
+                .tag("step", "diagnosticoIniciado")
+                .timer()
+                .count());
+        assertEquals(3, registry.get("saga.step.duration")
+                .tag("step", "diagnosticoIniciado")
+                .timer()
+                .totalTime(java.util.concurrent.TimeUnit.SECONDS));
     }
 
     private static final class ConflictFailure extends RuntimeException {
