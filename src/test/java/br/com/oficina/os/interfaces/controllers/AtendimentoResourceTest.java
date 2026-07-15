@@ -167,6 +167,38 @@ class AtendimentoResourceTest {
     }
 
     @Test
+    void deveFiltrarClientesNoBackendPorNomeDocumentoEEmail() {
+        var suffix = UUID.randomUUID().toString();
+        given()
+                .header("X-Idempotency-Key", "cliente-filter-" + suffix)
+                .contentType("application/json")
+                .body("""
+                        {
+                          "nome": "Cliente Filtro Canonico",
+                          "documento": "52998224725",
+                          "email": "filtro.%s@example.com"
+                        }
+                        """.formatted(suffix))
+                .when()
+                .post("/api/v1/clientes")
+                .then()
+                .statusCode(201);
+
+        given()
+                .queryParam("nome", "filtro canonico")
+                .queryParam("documento", "52998224725")
+                .queryParam("email", suffix.toUpperCase())
+                .when()
+                .get("/api/v1/clientes")
+                .then()
+                .statusCode(200)
+                .body("totalItems", equalTo(1))
+                .body("items[0].nome", equalTo("Cliente Filtro Canonico"))
+                .body("items[0].documento", equalTo("52998224725"))
+                .body("items[0].email", equalTo("filtro." + suffix + "@example.com"));
+    }
+
+    @Test
     void deveCriarConsultarEAtualizarVeiculoDoCliente() {
         var veiculoId = given()
                 .header("X-Idempotency-Key", "veiculo-create-001")

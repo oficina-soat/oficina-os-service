@@ -50,8 +50,9 @@ public class ClientesController {
                 .thenApply(presenter::cliente);
     }
 
-    public CompletableFuture<PageResponse<ClienteViewModel>> consultarClientes(Integer page, Integer size) {
-        return listarClientes.executar()
+    public CompletableFuture<PageResponse<ClienteViewModel>> consultarClientes(
+            Integer page, Integer size, String nome, String documento, String email) {
+        return listarClientes.executar(new ListarClientesUseCase.Query(nome, documento, email))
                 .thenApply(clientes -> clientes.stream()
                         .map(presenter::cliente)
                         .toList())

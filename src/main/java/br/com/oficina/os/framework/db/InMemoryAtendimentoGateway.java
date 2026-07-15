@@ -84,8 +84,15 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     }
 
     @Override
-    public synchronized List<ClienteRecord> listarClientes() {
+    public synchronized List<ClienteRecord> listarClientes(ClienteSearchCriteria criteria) {
         return clientes.values().stream()
+                .filter(cliente -> criteria.nome() == null
+                        || cliente.nome().toLowerCase().contains(criteria.nome().toLowerCase()))
+                .filter(cliente -> criteria.documento() == null
+                        || cliente.documento().equals(criteria.documento()))
+                .filter(cliente -> criteria.email() == null
+                        || cliente.email() != null
+                                && cliente.email().toLowerCase().contains(criteria.email().toLowerCase()))
                 .sorted(Comparator.comparing(ClienteRecord::criadoEm))
                 .toList();
     }

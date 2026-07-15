@@ -83,8 +83,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     @Override
-    public List<ClienteRecord> listarClientes() {
-        return listarClientesPostgres();
+    public List<ClienteRecord> listarClientes(ClienteSearchCriteria criteria) {
+        return listarClientesPostgres(criteria);
     }
 
     @Override
@@ -222,20 +222,32 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         });
     }
 
-    private List<ClienteRecord> listarClientesPostgres() {
+    private List<ClienteRecord> listarClientesPostgres(ClienteSearchCriteria criteria) {
         try (var connection = dataSource.getConnection();
                 var statement = connection.prepareStatement("""
                         SELECT c.id AS cliente_id, p.nome, p.documento, c.telefone, c.email, c.criado_em, c.atualizado_em
                         FROM cliente c
                         JOIN pessoa p ON p.id = c.pessoa_id
+                        WHERE (? IS NULL OR LOWER(p.nome) LIKE ?)
+                          AND (? IS NULL OR p.documento = ?)
+                          AND (? IS NULL OR LOWER(c.email) LIKE ?)
                         ORDER BY c.criado_em
-                        """);
-                var resultSet = statement.executeQuery()) {
+                        """)) {
+            var nome = criteria.nome() == null ? null : "%" + criteria.nome().toLowerCase() + "%";
+            var email = criteria.email() == null ? null : "%" + criteria.email().toLowerCase() + "%";
+            statement.setString(1, nome);
+            statement.setString(2, nome);
+            statement.setString(3, criteria.documento());
+            statement.setString(4, criteria.documento());
+            statement.setString(5, email);
+            statement.setString(6, email);
+            try (var resultSet = statement.executeQuery()) {
             var result = new ArrayList<ClienteRecord>();
             while (resultSet.next()) {
                 result.add(toCliente(resultSet));
             }
             return List.copyOf(result);
+            }
         } catch (SQLException exception) {
             throw persistenceFailure(exception);
         }
