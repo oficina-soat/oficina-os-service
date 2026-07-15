@@ -8,6 +8,7 @@ import br.com.oficina.os.interfaces.presenters.view_model.ClienteViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.HistoricoOrdemServicoViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.OrdemServicoViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.VeiculoViewModel;
+import br.com.oficina.os.core.entities.ordem_de_servico.AcaoPermitidaOrdemServico;
 
 public class AtendimentoPresenterAdapter {
 
@@ -42,7 +43,8 @@ public class AtendimentoPresenterAdapter {
                 ordem.descricaoProblema(),
                 ordem.estado(),
                 ordem.criadoEm(),
-                ordem.atualizadoEm());
+                ordem.atualizadoEm(),
+                AcaoPermitidaOrdemServico.porEstado(ordem.estado()));
     }
 
     public HistoricoOrdemServicoViewModel historico(HistoricoRecord historico) {
