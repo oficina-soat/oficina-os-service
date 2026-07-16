@@ -19,7 +19,8 @@ class DomainMessagingWorker {
     private final SqsDomainEventConsumer sqsConsumer;
     private final boolean workerEnabled;
     private final long pollIntervalMs;
-    private ScheduledExecutorService executor;
+    private ScheduledExecutorService publisherExecutor;
+    private ScheduledExecutorService consumerExecutor;
 
     DomainMessagingWorker(
             OutboxPublisher outboxPublisher,
@@ -37,27 +38,43 @@ class DomainMessagingWorker {
         if (!workerEnabled) {
             return;
         }
-        executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            var thread = new Thread(runnable, "domain-messaging-worker");
+        publisherExecutor = executor("outbox-publisher-worker");
+        consumerExecutor = executor("domain-event-consumer-worker");
+        publisherExecutor.scheduleWithFixedDelay(this::publishTick, 1000, Math.max(1000, pollIntervalMs), TimeUnit.MILLISECONDS);
+        consumerExecutor.scheduleWithFixedDelay(this::consumeTick, 1000, Math.max(1000, pollIntervalMs), TimeUnit.MILLISECONDS);
+    }
+
+    private ScheduledExecutorService executor(String threadName) {
+        return Executors.newSingleThreadScheduledExecutor(runnable -> {
+            var thread = new Thread(runnable, threadName);
             thread.setDaemon(true);
             return thread;
         });
-        executor.scheduleWithFixedDelay(this::tick, 1000, Math.max(1000, pollIntervalMs), TimeUnit.MILLISECONDS);
     }
 
     @PreDestroy
     void stop() {
-        if (executor != null) {
-            executor.shutdownNow();
+        if (publisherExecutor != null) {
+            publisherExecutor.shutdownNow();
+        }
+        if (consumerExecutor != null) {
+            consumerExecutor.shutdownNow();
         }
     }
 
-    private void tick() {
+    private void publishTick() {
         try {
             outboxPublisher.publicarPendentes();
+        } catch (RuntimeException exception) {
+            LOG.warn("Falha no ciclo de publicacao da Outbox.", exception);
+        }
+    }
+
+    private void consumeTick() {
+        try {
             sqsConsumer.consumirDisponiveis();
         } catch (RuntimeException exception) {
-            LOG.warn("Falha no ciclo de mensageria de dominio.", exception);
+            LOG.warn("Falha no ciclo de consumo de eventos de dominio.", exception);
         }
     }
 }

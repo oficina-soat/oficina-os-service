@@ -18,7 +18,7 @@ public class AtualizarUsuarioUseCase {
         var pessoa = UsuarioCommandSupport.pessoa(atual.pessoa().id(), command.nome(), command.documento());
         var atualizado = atual.atualizado(
                 pessoa,
-                UsuarioCommandSupport.statusAtualizacao(command.status()),
+                atual.status(),
                 UsuarioCommandSupport.papeis(command.papeis()));
         return CompletableFuture.completedFuture(gateway.atualizar(atualizado));
     }
@@ -27,7 +27,6 @@ public class AtualizarUsuarioUseCase {
             UUID usuarioId,
             String nome,
             String documento,
-            String status,
             List<String> papeis) {
     }
 }

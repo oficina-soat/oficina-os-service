@@ -136,12 +136,14 @@ O modo em memória permanece apenas para testes rápidos (`%test.oficina.persist
 As rotas abaixo exigem JWT com o papel `administrativo`:
 
 - `POST /api/v1/usuarios`: cria Pessoa e Usuário; requer `X-Idempotency-Key`;
-- `GET /api/v1/usuarios`: lista usuários com paginação;
+- `GET /api/v1/usuarios`: lista usuários com paginação e filtros remotos por nome, CPF, status e papel;
 - `GET /api/v1/usuarios/{usuarioId}`: consulta o agregado;
-- `PUT /api/v1/usuarios/{usuarioId}`: substitui nome, CPF, status e papéis;
+- `PUT /api/v1/usuarios/{usuarioId}`: substitui nome, CPF e papéis, preservando o estado atual;
+- `POST /api/v1/usuarios/{usuarioId}/bloqueio`: bloqueia explicitamente e de forma idempotente;
+- `POST /api/v1/usuarios/{usuarioId}/reativacao`: reativa explicitamente e de forma idempotente;
 - `DELETE /api/v1/usuarios/{usuarioId}`: realiza exclusão lógica, alterando o status para `INATIVO`.
 
-O payload não aceita senha. Os papéis canônicos são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. Criação, atualização e primeira inativação persistem, na mesma transação, `usuarioAdicionado`, `usuarioAtualizado` e `usuarioExcluido` na Outbox. Os eventos carregam o snapshot de Pessoa e Usuário sem credenciais para o consumidor `oficina-auth-sync-lambda`. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md), no [Contrato de Eventos de Domínio](../oficina-platform/contracts/Contrato%20de%20Eventos%20de%20Dom%C3%ADnio.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
+O payload não aceita senha. Cada usuário retorna `acoesPermitidas`, calculadas pelo backend a partir do estado canônico. Os papéis são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. Criação, atualização e mudanças de estado persistem o snapshot correspondente na Outbox. Publisher e consumidores usam executores independentes, impedindo que o long polling das filas atrase a publicação. Os eventos não carregam credenciais e alimentam o `oficina-auth-sync-lambda`. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md), no [Contrato de Eventos de Domínio](../oficina-platform/contracts/Contrato%20de%20Eventos%20de%20Dom%C3%ADnio.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
 
 ## Fail-fast de runtime
 
