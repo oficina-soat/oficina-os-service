@@ -32,6 +32,7 @@ public class CorrelationIdFilter implements ContainerRequestFilter, ContainerRes
         String requestId = UUID.randomUUID().toString();
 
         requestContext.setProperty(PROPERTY_NAME, correlationId);
+        requestContext.getHeaders().putSingle(HEADER_NAME, correlationId);
         requestContext.setProperty(REQUEST_ID_PROPERTY, requestId);
         requestContext.setProperty(START_TIME_NANOS_PROPERTY, System.nanoTime());
         MDC.put(PROPERTY_NAME, correlationId);

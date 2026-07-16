@@ -4,6 +4,7 @@ import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeSer
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.List;
+import java.math.BigDecimal;
 import br.com.oficina.os.core.entities.ordem_de_servico.AcaoPermitidaOrdemServico;
 
 public record OrdemServicoViewModel(
@@ -14,5 +15,14 @@ public record OrdemServicoViewModel(
         TipoDeEstadoDaOrdemDeServico estado,
         OffsetDateTime criadoEm,
         OffsetDateTime atualizadoEm,
+        List<ItemServicoViewModel> servicos,
+        List<ItemPecaViewModel> pecas,
         List<AcaoPermitidaOrdemServico> acoesPermitidas) {
+    public record ItemServicoViewModel(UUID servicoId, String nome, BigDecimal quantidade,
+            BigDecimal valorUnitario, BigDecimal valorTotal) {
+    }
+
+    public record ItemPecaViewModel(UUID pecaId, String nome, BigDecimal quantidade,
+            BigDecimal valorUnitario, BigDecimal valorTotal) {
+    }
 }

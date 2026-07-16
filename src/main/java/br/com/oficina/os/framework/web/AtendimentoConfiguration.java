@@ -11,6 +11,9 @@ import br.com.oficina.os.core.usecases.ordem_de_servico.BuscarOrdemServicoUseCas
 import br.com.oficina.os.core.usecases.ordem_de_servico.CancelarOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.ConsultarHistoricoOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.ListarOrdensServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.IncluirServicoOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.IncluirPecaOrdemServicoUseCase;
+import br.com.oficina.os.core.interfaces.gateway.CatalogoGateway;
 import br.com.oficina.os.core.usecases.outbox.PublicarEventosPendentesUseCase;
 import br.com.oficina.os.core.usecases.saga.ConsumirEventoDaSagaUseCase;
 import br.com.oficina.os.core.usecases.veiculo.AtualizarVeiculoUseCase;
@@ -100,6 +103,16 @@ public class AtendimentoConfiguration {
     }
 
     @Produces
+    IncluirServicoOrdemServicoUseCase incluirServicoOrdemServicoUseCase(AtendimentoGateway gateway, CatalogoGateway catalogo) {
+        return new IncluirServicoOrdemServicoUseCase(gateway, catalogo);
+    }
+
+    @Produces
+    IncluirPecaOrdemServicoUseCase incluirPecaOrdemServicoUseCase(AtendimentoGateway gateway, CatalogoGateway catalogo) {
+        return new IncluirPecaOrdemServicoUseCase(gateway, catalogo);
+    }
+
+    @Produces
     ConsumirEventoDaSagaUseCase consumirEventoDaSagaUseCase(AtendimentoGateway gateway) {
         return new ConsumirEventoDaSagaUseCase(gateway);
     }
@@ -144,6 +157,8 @@ public class AtendimentoConfiguration {
             ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico,
             AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico,
             CancelarOrdemServicoUseCase cancelarOrdemServico,
+            IncluirServicoOrdemServicoUseCase incluirServico,
+            IncluirPecaOrdemServicoUseCase incluirPeca,
             AtendimentoPresenterAdapter presenter) {
         return new OrdensServicoController(
                 abrirOrdemServico,
@@ -152,6 +167,8 @@ public class AtendimentoConfiguration {
                 consultarHistoricoOrdemServico,
                 alterarEstadoOrdemServico,
                 cancelarOrdemServico,
+                incluirServico,
+                incluirPeca,
                 presenter);
     }
 

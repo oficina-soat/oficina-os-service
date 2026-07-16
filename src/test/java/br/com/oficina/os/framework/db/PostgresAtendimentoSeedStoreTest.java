@@ -16,6 +16,8 @@ import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
 import br.com.oficina.os.core.exceptions.UsuarioConflitanteException;
 import br.com.oficina.os.core.exceptions.UsuarioNaoEncontradoException;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemPecaRecord;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemServicoRecord;
 import br.com.oficina.os.framework.idempotency.IdempotencyRecord.ProcessingStatus;
 import br.com.oficina.os.framework.idempotency.PersistentIdempotencyStore;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -26,6 +28,7 @@ import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.NotFoundException;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -87,11 +90,22 @@ class PostgresAtendimentoSeedStoreTest {
         reloaded.consumirEvento(evento);
         reloaded.consumirEvento(evento);
 
+        var servicoId = UUID.randomUUID();
+        var pecaId = UUID.randomUUID();
+        reloaded.incluirServico(ordem.ordemServicoId(),
+                new ItemServicoRecord(servicoId, "Diagnostico", BigDecimal.ONE, new BigDecimal("80.00")), "corr-items");
+        reloaded.incluirPeca(ordem.ordemServicoId(),
+                new ItemPecaRecord(pecaId, "Filtro", new BigDecimal("2"), new BigDecimal("25.00")), "corr-items");
+
         var afterInboxReload = new AtendimentoSeedStore(dataSource, "postgresql");
         assertEquals(EstadoSaga.EM_DIAGNOSTICO, afterInboxReload.buscarSaga(ordem.ordemServicoId()).estado());
         assertEquals(2, afterInboxReload.historicoSaga(ordem.ordemServicoId()).size());
         assertEquals(2, afterInboxReload.historico(ordem.ordemServicoId()).size());
         assertFalse(afterInboxReload.listarOutbox().isEmpty());
+        assertEquals(servicoId, afterInboxReload.buscarOrdemServico(ordem.ordemServicoId()).servicos().getFirst().servicoId());
+        assertEquals(pecaId, afterInboxReload.buscarOrdemServico(ordem.ordemServicoId()).pecas().getFirst().pecaId());
+        assertTrue(afterInboxReload.listarOutbox().stream().anyMatch(event ->
+                event.eventType().equals("servicoIncluidoNaOrdemDeServico") && event.correlationId().equals("corr-items")));
     }
 
     @Test
