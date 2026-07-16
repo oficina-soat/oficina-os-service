@@ -85,7 +85,7 @@ Pré-requisitos:
 - acesso ao repositório `../oficina-platform`, usado pelos testes de contrato;
 - acesso opcional ao repositório `../oficina-infra`, usado para subir dependências compartilhadas da suíte.
 
-Ferramentas locais recomendadas para validação de CI/CD, Dockerfile e scripts estão em [Ferramentas de validação local](../oficina-platform/docs/validation-tooling.md).
+Ferramentas locais recomendadas para validação de CI/CD, Dockerfile e scripts estão em [Ferramentas de validação local](../oficina-platform/docs/delivery/validation-tooling.md).
 
 Dependências locais compartilhadas podem ser iniciadas pelo `oficina-infra`:
 
@@ -238,7 +238,7 @@ docker run --rm -p 8080:8080 \
 
 ## Kubernetes
 
-A estratégia de entrega dos manifests está definida em [Estratégia de entrega dos manifestos Kubernetes](../oficina-platform/docs/kubernetes-manifest-strategy.md).
+A estratégia de entrega dos manifests está definida em [Estratégia de entrega dos manifestos Kubernetes](../oficina-platform/docs/infrastructure/kubernetes-manifest-strategy.md).
 
 Este repositório é a fonte canônica do Dockerfile e da base Kubernetes executável em [`k8s/base/`](k8s/base/). O `oficina-infra` mantém a composição, os secrets e os componentes compartilhados do ambiente `lab`; o template normativo permanece em [Template Kubernetes do oficina-os-service](../oficina-platform/templates/kubernetes/base/oficina-os-service/).
 
@@ -300,4 +300,4 @@ src/main/resources/
 
 ## Próximo Trabalho
 
-O backlog local está em [TODO.md](TODO.md). A persistência PostgreSQL runtime, o CRUD administrativo de usuários com eventos transacionais, a idempotência persistente, a mensageria SNS/SQS e o fail-fast de runtime foram implementados. Permanecem as evidências remotas no ambiente `lab` e os itens posteriores do roadmap da plataforma.
+O [TODO.md](TODO.md) é o checklist histórico das entregas concluídas. Novos incrementos, inclusive evidências remotas, são controlados no [ROADMAP da plataforma](../oficina-platform/ROADMAP.md).
