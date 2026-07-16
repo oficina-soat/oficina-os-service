@@ -44,6 +44,10 @@ public class AtendimentoPresenterAdapter {
                 ordem.estado(),
                 ordem.criadoEm(),
                 ordem.atualizadoEm(),
+                ordem.servicos().stream().map(item -> new OrdemServicoViewModel.ItemServicoViewModel(
+                        item.servicoId(), item.nome(), item.quantidade(), item.valorUnitario(), item.valorTotal())).toList(),
+                ordem.pecas().stream().map(item -> new OrdemServicoViewModel.ItemPecaViewModel(
+                        item.pecaId(), item.nome(), item.quantidade(), item.valorUnitario(), item.valorTotal())).toList(),
                 AcaoPermitidaOrdemServico.porEstado(ordem.estado()));
     }
 

@@ -5,6 +5,7 @@ import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeSer
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,6 +39,10 @@ public interface AtendimentoGateway {
     List<OrdemServicoRecord> listarOrdensServico(TipoDeEstadoDaOrdemDeServico estado);
 
     OrdemServicoRecord buscarOrdemServico(UUID ordemServicoId);
+
+    OrdemServicoRecord incluirServico(UUID ordemServicoId, ItemServicoRecord item, String correlationId);
+
+    OrdemServicoRecord incluirPeca(UUID ordemServicoId, ItemPecaRecord item, String correlationId);
 
     List<HistoricoRecord> historico(UUID ordemServicoId);
 
@@ -101,7 +106,25 @@ public interface AtendimentoGateway {
             String descricaoProblema,
             TipoDeEstadoDaOrdemDeServico estado,
             OffsetDateTime criadoEm,
-            OffsetDateTime atualizadoEm) {
+            OffsetDateTime atualizadoEm,
+            List<ItemServicoRecord> servicos,
+            List<ItemPecaRecord> pecas) {
+        public OrdemServicoRecord {
+            servicos = servicos == null ? List.of() : List.copyOf(servicos);
+            pecas = pecas == null ? List.of() : List.copyOf(pecas);
+        }
+    }
+
+    record ItemServicoRecord(UUID servicoId, String nome, BigDecimal quantidade, BigDecimal valorUnitario) {
+        public BigDecimal valorTotal() {
+            return quantidade.multiply(valorUnitario);
+        }
+    }
+
+    record ItemPecaRecord(UUID pecaId, String nome, BigDecimal quantidade, BigDecimal valorUnitario) {
+        public BigDecimal valorTotal() {
+            return quantidade.multiply(valorUnitario);
+        }
     }
 
     record HistoricoRecord(

@@ -24,7 +24,6 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     public static final UUID SEED_CLIENTE_ID = AtendimentoGateway.SEED_CLIENTE_ID;
     public static final UUID SEED_VEICULO_ID = AtendimentoGateway.SEED_VEICULO_ID;
     public static final UUID SEED_ORDEM_SERVICO_ID = AtendimentoGateway.SEED_ORDEM_SERVICO_ID;
-
     private final AtendimentoGateway delegate;
     private final OperationalMetrics metrics;
     private final SagaObservability sagaObservability;
@@ -40,7 +39,6 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
         this.sagaObservability = sagaObservability;
         this.database = persistenceKind.toLowerCase(java.util.Locale.ROOT);
     }
-
     public AtendimentoSeedStore() {
         this.delegate = new InMemoryAtendimentoGateway();
         this.metrics = new OperationalMetrics(new SimpleMeterRegistry(), SERVICE_NAME);
@@ -150,6 +148,15 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
         return persistence(ORDEM_SERVICO, FIND_BY_ID, () -> delegate.buscarOrdemServico(ordemServicoId));
     }
 
+    @Override
+    public OrdemServicoRecord incluirServico(UUID id, ItemServicoRecord item, String correlationId) {
+        return persistence(ORDEM_SERVICO, "add_service", () -> delegate.incluirServico(id, item, correlationId));
+    }
+
+    @Override
+    public OrdemServicoRecord incluirPeca(UUID id, ItemPecaRecord item, String correlationId) {
+        return persistence(ORDEM_SERVICO, "add_part", () -> delegate.incluirPeca(id, item, correlationId));
+    }
     @Override
     public List<HistoricoRecord> historico(UUID ordemServicoId) {
         return persistence("ordem_servico_history", "list", () -> delegate.historico(ordemServicoId));

@@ -13,7 +13,11 @@ class AcaoPermitidaOrdemServicoTest {
                 List.of(AcaoPermitidaOrdemServico.INICIAR_DIAGNOSTICO, AcaoPermitidaOrdemServico.CANCELAR),
                 AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.RECEBIDA));
         assertEquals(
-                List.of(AcaoPermitidaOrdemServico.CONCLUIR_DIAGNOSTICO, AcaoPermitidaOrdemServico.CANCELAR),
+                List.of(
+                        AcaoPermitidaOrdemServico.INCLUIR_SERVICO,
+                        AcaoPermitidaOrdemServico.INCLUIR_PECA,
+                        AcaoPermitidaOrdemServico.CONCLUIR_DIAGNOSTICO,
+                        AcaoPermitidaOrdemServico.CANCELAR),
                 AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO));
         assertEquals(
                 List.of(

@@ -66,7 +66,9 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 "Veiculo nao liga",
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 seedTime,
-                seedTime));
+                seedTime,
+                List.of(),
+                List.of()));
         historicos.put(SEED_ORDEM_SERVICO_ID, new ArrayList<>(List.of(new HistoricoRecord(
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 seedTime,
@@ -185,7 +187,9 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 descricaoProblema.trim(),
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 agora,
-                agora);
+                agora,
+                List.of(),
+                List.of());
         ordensServico.put(ordem.ordemServicoId(), ordem);
         historicos.put(ordem.ordemServicoId(), new ArrayList<>(List.of(new HistoricoRecord(
                 ordem.estado(),
@@ -227,6 +231,61 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     }
 
     @Override
+    public synchronized OrdemServicoRecord incluirServico(UUID ordemServicoId, ItemServicoRecord item, String correlationId) {
+        var atual = validarComposicao(ordemServicoId);
+        if (atual.servicos().stream().anyMatch(existing -> existing.servicoId().equals(item.servicoId()))) {
+            throw new WebApplicationException("Servico ja incluido na ordem de servico.", Response.Status.CONFLICT);
+        }
+        var servicos = new ArrayList<>(atual.servicos());
+        servicos.add(item);
+        var atualizado = copiarComposicao(atual, servicos, atual.pecas());
+        ordensServico.put(ordemServicoId, atualizado);
+        enfileirarEvento("servicoIncluidoNaOrdemDeServico", "oficina.os.servico-incluido-na-ordem-de-servico",
+                ordemServicoId, payloadServico(ordemServicoId, item, atualizado.atualizadoEm()), correlationId, atualizado.atualizadoEm());
+        return atualizado;
+    }
+
+    @Override
+    public synchronized OrdemServicoRecord incluirPeca(UUID ordemServicoId, ItemPecaRecord item, String correlationId) {
+        var atual = validarComposicao(ordemServicoId);
+        if (atual.pecas().stream().anyMatch(existing -> existing.pecaId().equals(item.pecaId()))) {
+            throw new WebApplicationException("Peca ja incluida na ordem de servico.", Response.Status.CONFLICT);
+        }
+        var pecas = new ArrayList<>(atual.pecas());
+        pecas.add(item);
+        var atualizado = copiarComposicao(atual, atual.servicos(), pecas);
+        ordensServico.put(ordemServicoId, atualizado);
+        enfileirarEvento("pecaIncluidaNaOrdemDeServico", "oficina.os.peca-incluida-na-ordem-de-servico",
+                ordemServicoId, payloadPeca(ordemServicoId, item, atualizado.atualizadoEm()), correlationId, atualizado.atualizadoEm());
+        return atualizado;
+    }
+
+    private OrdemServicoRecord validarComposicao(UUID ordemServicoId) {
+        var ordem = buscarOrdemServico(ordemServicoId);
+        if (ordem.estado() != TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
+            throw new WebApplicationException("Itens so podem ser incluidos durante o diagnostico.", Response.Status.CONFLICT);
+        }
+        return ordem;
+    }
+
+    private static OrdemServicoRecord copiarComposicao(OrdemServicoRecord atual, List<ItemServicoRecord> servicos, List<ItemPecaRecord> pecas) {
+        return new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(), atual.descricaoProblema(),
+                atual.estado(), atual.criadoEm(), OffsetDateTime.now(ZoneOffset.UTC), servicos, pecas);
+    }
+
+    private static Map<String, Object> payloadServico(UUID ordemId, ItemServicoRecord item, OffsetDateTime ocorridoEm) {
+        return Map.of(PAYLOAD_ORDEM_SERVICO_ID, ordemId.toString(), "servico", Map.of(
+                "servicoId", item.servicoId().toString(), "nome", item.nome(), "quantidade", item.quantidade(),
+                "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidoEm", ocorridoEm.toString());
+    }
+
+    private static Map<String, Object> payloadPeca(UUID ordemId, ItemPecaRecord item, OffsetDateTime ocorridoEm) {
+        return Map.of(PAYLOAD_ORDEM_SERVICO_ID, ordemId.toString(), "peca", Map.of(
+                "pecaId", item.pecaId().toString(), "nome", item.nome(), "quantidade", item.quantidade(),
+                "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidaEm", ocorridoEm.toString());
+    }
+
+    @Override
     public synchronized List<HistoricoRecord> historico(UUID ordemServicoId) {
         buscarOrdemServico(ordemServicoId);
         return List.copyOf(historicos.getOrDefault(ordemServicoId, List.of()));
@@ -243,7 +302,9 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 atual.descricaoProblema(),
                 novoEstado,
                 atual.criadoEm(),
-                OffsetDateTime.now(ZoneOffset.UTC));
+                OffsetDateTime.now(ZoneOffset.UTC),
+                atual.servicos(),
+                atual.pecas());
         ordensServico.put(ordemServicoId, atualizado);
         historicos.computeIfAbsent(ordemServicoId, _ -> new ArrayList<>())
                 .add(new HistoricoRecord(novoEstado, atualizado.atualizadoEm(), normalizar(motivo)));

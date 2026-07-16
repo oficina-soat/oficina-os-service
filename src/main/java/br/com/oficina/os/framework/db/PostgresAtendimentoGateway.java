@@ -133,6 +133,16 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     @Override
+    public OrdemServicoRecord incluirServico(UUID ordemServicoId, ItemServicoRecord item, String correlationId) {
+        return inTransaction(connection -> incluirServicoPostgres(connection, ordemServicoId, item, correlationId));
+    }
+
+    @Override
+    public OrdemServicoRecord incluirPeca(UUID ordemServicoId, ItemPecaRecord item, String correlationId) {
+        return inTransaction(connection -> incluirPecaPostgres(connection, ordemServicoId, item, correlationId));
+    }
+
+    @Override
     public List<HistoricoRecord> historico(UUID ordemServicoId) {
         return historicoPostgres(ordemServicoId);
     }
@@ -392,7 +402,9 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 descricaoProblema.trim(),
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 agora,
-                agora);
+                agora,
+                List.of(),
+                List.of());
         return inTransaction(connection -> {
             buscarClientePostgres(connection, clienteId);
             var veiculo = buscarVeiculoPostgres(connection, veiculoId);
@@ -437,7 +449,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 while (resultSet.next()) {
                     result.add(toOrdemServico(resultSet));
                 }
-                return List.copyOf(result);
+                var composed = new ArrayList<OrdemServicoRecord>();
+                for (var ordem : result) {
+                    composed.add(carregarComposicao(connection, ordem));
+                }
+                return List.copyOf(composed);
             }
         } catch (SQLException exception) {
             throw persistenceFailure(exception);
@@ -474,6 +490,78 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             }
         } catch (SQLException exception) {
             throw persistenceFailure(exception);
+        }
+    }
+
+    private OrdemServicoRecord incluirServicoPostgres(Connection connection, UUID ordemServicoId, ItemServicoRecord item,
+            String correlationId) throws SQLException {
+        var atual = validarComposicao(connection, ordemServicoId);
+        var agora = OffsetDateTime.now(ZoneOffset.UTC);
+        try (var statement = connection.prepareStatement("""
+                INSERT INTO ordem_servico_servico
+                    (ordem_servico_id, servico_id, nome, quantidade, valor_unitario, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)) {
+            statement.setObject(1, ordemServicoId);
+            statement.setObject(2, item.servicoId());
+            statement.setString(3, item.nome());
+            statement.setBigDecimal(4, item.quantidade());
+            statement.setBigDecimal(5, item.valorUnitario());
+            statement.setObject(6, agora);
+            statement.executeUpdate();
+        }
+        atualizarOrdem(connection, ordemServicoId, agora);
+        enfileirarEventoPostgres(connection, "servicoIncluidoNaOrdemDeServico",
+                "oficina.os.servico-incluido-na-ordem-de-servico", ordemServicoId,
+                Map.of(PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId.toString(), "servico", Map.of(
+                        "servicoId", item.servicoId().toString(), "nome", item.nome(), "quantidade", item.quantidade(),
+                        "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidoEm", agora.toString()),
+                correlationId, agora);
+        return carregarComposicao(connection, new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(),
+                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of()));
+    }
+
+    private OrdemServicoRecord incluirPecaPostgres(Connection connection, UUID ordemServicoId, ItemPecaRecord item,
+            String correlationId) throws SQLException {
+        var atual = validarComposicao(connection, ordemServicoId);
+        var agora = OffsetDateTime.now(ZoneOffset.UTC);
+        try (var statement = connection.prepareStatement("""
+                INSERT INTO ordem_servico_peca
+                    (ordem_servico_id, peca_id, nome, quantidade, valor_unitario, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)) {
+            statement.setObject(1, ordemServicoId);
+            statement.setObject(2, item.pecaId());
+            statement.setString(3, item.nome());
+            statement.setBigDecimal(4, item.quantidade());
+            statement.setBigDecimal(5, item.valorUnitario());
+            statement.setObject(6, agora);
+            statement.executeUpdate();
+        }
+        atualizarOrdem(connection, ordemServicoId, agora);
+        enfileirarEventoPostgres(connection, "pecaIncluidaNaOrdemDeServico",
+                "oficina.os.peca-incluida-na-ordem-de-servico", ordemServicoId,
+                Map.of(PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId.toString(), "peca", Map.of(
+                        "pecaId", item.pecaId().toString(), "nome", item.nome(), "quantidade", item.quantidade(),
+                        "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidaEm", agora.toString()),
+                correlationId, agora);
+        return carregarComposicao(connection, new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(),
+                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of()));
+    }
+
+    private OrdemServicoRecord validarComposicao(Connection connection, UUID ordemServicoId) throws SQLException {
+        var ordem = buscarOrdemServicoPostgres(connection, ordemServicoId);
+        if (ordem.estado() != TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
+            throw new WebApplicationException("Itens so podem ser incluidos durante o diagnostico.", Response.Status.CONFLICT);
+        }
+        return ordem;
+    }
+
+    private void atualizarOrdem(Connection connection, UUID ordemServicoId, OffsetDateTime agora) throws SQLException {
+        try (var statement = connection.prepareStatement("UPDATE ordem_de_servico SET atualizado_em = ? WHERE id = ?")) {
+            statement.setObject(1, agora);
+            statement.setObject(2, ordemServicoId);
+            statement.executeUpdate();
         }
     }
 
@@ -736,7 +824,9 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 atual.descricaoProblema(),
                 novoEstado,
                 atual.criadoEm(),
-                OffsetDateTime.now(ZoneOffset.UTC));
+                OffsetDateTime.now(ZoneOffset.UTC),
+                atual.servicos(),
+                atual.pecas());
         try (var statement = connection.prepareStatement("""
                 UPDATE ordem_de_servico
                 SET estado_atual = ?, atualizado_em = ?
@@ -1148,9 +1238,40 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 if (!resultSet.next()) {
                     throw new NotFoundException("Ordem de servico nao encontrada: " + ordemServicoId);
                 }
-                return toOrdemServico(resultSet);
+                return carregarComposicao(connection, toOrdemServico(resultSet));
             }
         }
+    }
+
+    private OrdemServicoRecord carregarComposicao(Connection connection, OrdemServicoRecord ordem) throws SQLException {
+        var servicos = new ArrayList<ItemServicoRecord>();
+        try (var statement = connection.prepareStatement("""
+                SELECT servico_id, nome, quantidade, valor_unitario
+                FROM ordem_servico_servico WHERE ordem_servico_id = ? ORDER BY criado_em
+                """)) {
+            statement.setObject(1, ordem.ordemServicoId());
+            try (var resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    servicos.add(new ItemServicoRecord(uuid(resultSet, "servico_id"), resultSet.getString("nome"),
+                            resultSet.getBigDecimal("quantidade"), resultSet.getBigDecimal("valor_unitario")));
+                }
+            }
+        }
+        var pecas = new ArrayList<ItemPecaRecord>();
+        try (var statement = connection.prepareStatement("""
+                SELECT peca_id, nome, quantidade, valor_unitario
+                FROM ordem_servico_peca WHERE ordem_servico_id = ? ORDER BY criado_em
+                """)) {
+            statement.setObject(1, ordem.ordemServicoId());
+            try (var resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    pecas.add(new ItemPecaRecord(uuid(resultSet, "peca_id"), resultSet.getString("nome"),
+                            resultSet.getBigDecimal("quantidade"), resultSet.getBigDecimal("valor_unitario")));
+                }
+            }
+        }
+        return new OrdemServicoRecord(ordem.ordemServicoId(), ordem.clienteId(), ordem.veiculoId(), ordem.descricaoProblema(),
+                ordem.estado(), ordem.criadoEm(), ordem.atualizadoEm(), servicos, pecas);
     }
 
     private SagaRecord buscarSagaPostgres(Connection connection, UUID ordemServicoId) throws SQLException {
@@ -1242,7 +1363,9 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 resultSet.getString("descricao_problema"),
                 TipoDeEstadoDaOrdemDeServico.valueOf(resultSet.getString("estado_atual")),
                 offsetDateTime(resultSet, COLUMN_CRIADO_EM),
-                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM));
+                offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM),
+                List.of(),
+                List.of());
     }
 
     private SagaRecord toSaga(ResultSet resultSet) throws SQLException {
@@ -1344,7 +1467,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         }
     }
 
-    private static IllegalStateException persistenceFailure(SQLException exception) {
+    private static RuntimeException persistenceFailure(SQLException exception) {
+        if ("23505".equals(exception.getSQLState())) {
+            return new WebApplicationException("Item ja incluido na ordem de servico.", Response.Status.CONFLICT);
+        }
         return new IllegalStateException("Falha ao acessar PostgreSQL do oficina-os-service.", exception);
     }
 

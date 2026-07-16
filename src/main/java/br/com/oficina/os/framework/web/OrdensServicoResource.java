@@ -20,6 +20,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.HeaderParam;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
@@ -61,6 +62,26 @@ public class OrdensServicoResource {
     @Path("{ordemServicoId}")
     public Uni<OrdemServicoViewModel> consultarOrdemServico(@PathParam("ordemServicoId") UUID ordemServicoId) {
         return Uni.createFrom().completionStage(ordensServicoController.consultarOrdemServico(ordemServicoId));
+    }
+
+    @POST
+    @Path("{ordemServicoId}/servicos")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
+    public Uni<OrdemServicoViewModel> incluirServico(
+            @PathParam("ordemServicoId") UUID ordemServicoId,
+            @HeaderParam("X-Correlation-Id") String correlationId,
+            OrdensServicoController.ItemServicoRequest request) {
+        return Uni.createFrom().completionStage(ordensServicoController.incluirServico(ordemServicoId, request, correlationId));
+    }
+
+    @POST
+    @Path("{ordemServicoId}/pecas")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "Chave de idempotência da operação mutável.")
+    public Uni<OrdemServicoViewModel> incluirPeca(
+            @PathParam("ordemServicoId") UUID ordemServicoId,
+            @HeaderParam("X-Correlation-Id") String correlationId,
+            OrdensServicoController.ItemPecaRequest request) {
+        return Uni.createFrom().completionStage(ordensServicoController.incluirPeca(ordemServicoId, request, correlationId));
     }
 
     @GET

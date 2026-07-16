@@ -7,6 +7,8 @@ import br.com.oficina.os.core.usecases.ordem_de_servico.BuscarOrdemServicoUseCas
 import br.com.oficina.os.core.usecases.ordem_de_servico.CancelarOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.ConsultarHistoricoOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.ListarOrdensServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.IncluirServicoOrdemServicoUseCase;
+import br.com.oficina.os.core.usecases.ordem_de_servico.IncluirPecaOrdemServicoUseCase;
 import br.com.oficina.os.interfaces.presenters.AtendimentoPresenterAdapter;
 import br.com.oficina.os.interfaces.presenters.view_model.HistoricoOrdemServicoViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.OperacaoAssincronaViewModel;
@@ -14,6 +16,7 @@ import br.com.oficina.os.interfaces.presenters.view_model.OrdemServicoViewModel;
 import br.com.oficina.os.interfaces.presenters.view_model.PageResponse;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
 import java.util.concurrent.CompletableFuture;
 
 public class OrdensServicoController {
@@ -23,6 +26,8 @@ public class OrdensServicoController {
     private final ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico;
     private final AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico;
     private final CancelarOrdemServicoUseCase cancelarOrdemServico;
+    private final IncluirServicoOrdemServicoUseCase incluirServico;
+    private final IncluirPecaOrdemServicoUseCase incluirPeca;
     private final AtendimentoPresenterAdapter presenter;
 
     public OrdensServicoController(
@@ -32,6 +37,8 @@ public class OrdensServicoController {
             ConsultarHistoricoOrdemServicoUseCase consultarHistoricoOrdemServico,
             AlterarEstadoOrdemServicoUseCase alterarEstadoOrdemServico,
             CancelarOrdemServicoUseCase cancelarOrdemServico,
+            IncluirServicoOrdemServicoUseCase incluirServico,
+            IncluirPecaOrdemServicoUseCase incluirPeca,
             AtendimentoPresenterAdapter presenter) {
         this.abrirOrdemServico = abrirOrdemServico;
         this.listarOrdensServico = listarOrdensServico;
@@ -39,7 +46,21 @@ public class OrdensServicoController {
         this.consultarHistoricoOrdemServico = consultarHistoricoOrdemServico;
         this.alterarEstadoOrdemServico = alterarEstadoOrdemServico;
         this.cancelarOrdemServico = cancelarOrdemServico;
+        this.incluirServico = incluirServico;
+        this.incluirPeca = incluirPeca;
         this.presenter = presenter;
+    }
+
+    public CompletableFuture<OrdemServicoViewModel> incluirServico(UUID ordemServicoId, ItemServicoRequest request,
+            String correlationId) {
+        return incluirServico.executar(new IncluirServicoOrdemServicoUseCase.Command(
+                ordemServicoId, request.servicoId(), request.quantidade(), correlationId)).thenApply(presenter::ordemServico);
+    }
+
+    public CompletableFuture<OrdemServicoViewModel> incluirPeca(UUID ordemServicoId, ItemPecaRequest request,
+            String correlationId) {
+        return incluirPeca.executar(new IncluirPecaOrdemServicoUseCase.Command(
+                ordemServicoId, request.pecaId(), request.quantidade(), correlationId)).thenApply(presenter::ordemServico);
     }
 
     public CompletableFuture<OrdemServicoViewModel> abrirOrdemServico(OrdemServicoCreateRequest request) {
@@ -106,5 +127,11 @@ public class OrdensServicoController {
     }
 
     public record CancelamentoRequest(String motivo) {
+    }
+
+    public record ItemServicoRequest(UUID servicoId, BigDecimal quantidade) {
+    }
+
+    public record ItemPecaRequest(UUID pecaId, BigDecimal quantidade) {
     }
 }
