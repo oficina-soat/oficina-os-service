@@ -42,6 +42,40 @@ O serviço segue Clean Architecture com `core/entities`, portas em `core/interfa
 
 Os casos de uso são classes Java puras instanciadas por [AtendimentoConfiguration](src/main/java/br/com/oficina/os/framework/web/AtendimentoConfiguration.java) e [UsuariosConfiguration](src/main/java/br/com/oficina/os/framework/web/UsuariosConfiguration.java). Resources e presenters chamam casos de uso e tipos do core; persistência e mensageria ficam atrás das portas [AtendimentoGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/AtendimentoGateway.java) e [UsuarioGateway](src/main/java/br/com/oficina/os/core/interfaces/gateway/UsuarioGateway.java). A regra é validada por [CleanArchitectureBoundaryTest](src/test/java/br/com/oficina/os/architecture/CleanArchitectureBoundaryTest.java).
 
+```mermaid
+flowchart LR
+  HTTP["API REST<br/>clientes, veículos, usuários e OS"] --> Web["framework/web<br/>Resources e composição CDI"]
+  Web --> Controllers["interfaces/controllers<br/>adaptação de entrada"]
+  Controllers --> UseCases["core/usecases<br/>regras e orquestração"]
+  UseCases --> Domain["core/entities<br/>Cliente, Veículo, OS e Saga"]
+  UseCases --> Ports["core/interfaces<br/>portas de saída"]
+  Presenters["interfaces/presenters<br/>view models"] --> HTTP
+  Controllers --> Presenters
+
+  Ports --> JDBC["framework/db<br/>adapters JDBC"]
+  JDBC --> Postgres[("PostgreSQL oficina_os<br/>agregados, histórico, Inbox,<br/>Outbox e idempotência")]
+  Ports --> Messaging["framework/messaging<br/>Outbox publisher e consumers"]
+  Messaging --> SNS["SNS<br/>eventos de OS e Saga"]
+  InboundSNS["SNS<br/>eventos de Billing e Execution"] --> SQS["SQS do oficina-os-service"]
+  SQS --> Messaging
+
+  UseCases --> Saga["Saga orquestrada<br/>avançar, aguardar ou compensar"]
+  Saga --> Messaging
+  Billing["oficina-billing-service"] --> InboundSNS
+  Execution["oficina-execution-service"] --> InboundSNS
+  SNS --> Billing
+  SNS --> Execution
+
+  classDef core fill:#e5f5ec,stroke:#176b45,color:#14202b;
+  classDef adapter fill:#e7f1fa,stroke:#1f5f99,color:#14202b;
+  classDef external fill:#fff3d6,stroke:#7a4b00,color:#14202b;
+  class Domain,UseCases,Ports,Saga core;
+  class Web,Controllers,Presenters,JDBC,Messaging adapter;
+  class HTTP,Postgres,SNS,InboundSNS,SQS,Billing,Execution external;
+```
+
+O serviço possui ownership de Cliente, Veículo, Ordem de Serviço e da Saga, mas não de catálogo, estoque ou finanças. A sequência e as compensações completas estão em [Fluxos da Saga](../oficina-platform/docs/architecture/saga-flows.md).
+
 ## Setup local
 
 Pré-requisitos:
