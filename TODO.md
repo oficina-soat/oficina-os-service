@@ -1,6 +1,8 @@
-# TODO do oficina-os-service
+# Histórico de implementação do oficina-os-service
 
-## Próximas Tarefas
+Este checklist registra o escopo já entregue. Novas tarefas são controladas no roadmap do `oficina-platform`, evitando dois backlogs concorrentes.
+
+## Entregas concluídas
 
 - [x] Copiar e adaptar domínio de Pessoa e Usuário do `oficina-app`.
 - [x] Copiar e adaptar domínio de Cliente e Veículo.
