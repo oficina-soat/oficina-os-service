@@ -35,12 +35,18 @@ class UsuarioUseCasesTest {
                 criado.id(),
                 "Ana Administradora",
                 "36655462007",
-                "bloqueado",
                 List.of("administrativo", "recepcionista"))).join();
 
         assertEquals(criado.pessoa().id(), atualizado.pessoa().id());
         assertEquals("36655462007", atualizado.pessoa().documento().valor());
-        assertEquals(UsuarioStatus.BLOQUEADO, atualizado.status());
+        assertEquals(UsuarioStatus.ATIVO, atualizado.status());
+
+        var bloqueado = new AlterarStatusUsuarioUseCase(gateway).executar(new AlterarStatusUsuarioUseCase.Command(
+                criado.id(), AlterarStatusUsuarioUseCase.Acao.BLOQUEAR)).join();
+        assertEquals(UsuarioStatus.BLOQUEADO, bloqueado.status());
+        var reativado = new AlterarStatusUsuarioUseCase(gateway).executar(new AlterarStatusUsuarioUseCase.Command(
+                criado.id(), AlterarStatusUsuarioUseCase.Acao.REATIVAR)).join();
+        assertEquals(UsuarioStatus.ATIVO, reativado.status());
 
         new InativarUsuarioUseCase(gateway).executar(criado.id()).join();
         assertEquals(UsuarioStatus.INATIVO, gateway.buscar(criado.id()).status());

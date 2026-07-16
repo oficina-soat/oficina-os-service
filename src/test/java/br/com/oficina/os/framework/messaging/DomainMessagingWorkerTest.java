@@ -30,27 +30,29 @@ class DomainMessagingWorkerTest {
     }
 
     @Test
-    void deveExecutarCicloDeMensageria() {
+    void deveExecutarCiclosIndependentesDeMensageria() {
         var publisher = new CountingOutboxPublisher(false);
         var consumer = new CountingSqsDomainEventConsumer();
         var worker = new DomainMessagingWorker(publisher, consumer, false, 1);
 
-        assertDoesNotThrow(() -> invokeTick(worker));
+        assertDoesNotThrow(() -> invokeTick(worker, "publishTick"));
+        assertDoesNotThrow(() -> invokeTick(worker, "consumeTick"));
 
         assertEquals(1, publisher.publishCalls);
         assertEquals(1, consumer.consumeCalls);
     }
 
     @Test
-    void deveIsolarFalhaDoCicloDeMensageria() {
+    void deveIsolarFalhaDoPublisherDoCicloDeConsumo() {
         var publisher = new CountingOutboxPublisher(true);
         var consumer = new CountingSqsDomainEventConsumer();
         var worker = new DomainMessagingWorker(publisher, consumer, false, 1);
 
-        assertDoesNotThrow(() -> invokeTick(worker));
+        assertDoesNotThrow(() -> invokeTick(worker, "publishTick"));
+        assertDoesNotThrow(() -> invokeTick(worker, "consumeTick"));
 
         assertEquals(1, publisher.publishCalls);
-        assertEquals(0, consumer.consumeCalls);
+        assertEquals(1, consumer.consumeCalls);
     }
 
     @Test
@@ -66,8 +68,8 @@ class DomainMessagingWorkerTest {
         assertDoesNotThrow(worker::stop);
     }
 
-    private static void invokeTick(DomainMessagingWorker worker) throws ReflectiveOperationException {
-        var tick = DomainMessagingWorker.class.getDeclaredMethod("tick");
+    private static void invokeTick(DomainMessagingWorker worker, String methodName) throws ReflectiveOperationException {
+        var tick = DomainMessagingWorker.class.getDeclaredMethod(methodName);
         tick.setAccessible(true);
         tick.invoke(worker);
     }

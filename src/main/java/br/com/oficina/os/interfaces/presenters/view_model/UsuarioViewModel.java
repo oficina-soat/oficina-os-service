@@ -5,6 +5,7 @@ import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import br.com.oficina.os.core.entities.usuario.AcaoPermitidaUsuario;
 
 public record UsuarioViewModel(
         UUID usuarioId,
@@ -14,6 +15,7 @@ public record UsuarioViewModel(
         TipoPessoa tipoPessoa,
         UsuarioStatus status,
         List<String> papeis,
+        List<AcaoPermitidaUsuario> acoesPermitidas,
         OffsetDateTime criadoEm,
         OffsetDateTime atualizadoEm) {
 }

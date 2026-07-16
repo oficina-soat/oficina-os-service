@@ -6,6 +6,7 @@ import br.com.oficina.os.core.usecases.usuario.BuscarUsuarioUseCase;
 import br.com.oficina.os.core.usecases.usuario.CriarUsuarioUseCase;
 import br.com.oficina.os.core.usecases.usuario.InativarUsuarioUseCase;
 import br.com.oficina.os.core.usecases.usuario.ListarUsuariosUseCase;
+import br.com.oficina.os.core.usecases.usuario.AlterarStatusUsuarioUseCase;
 import br.com.oficina.os.interfaces.controllers.UsuariosController;
 import br.com.oficina.os.interfaces.presenters.UsuarioPresenterAdapter;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -40,12 +41,18 @@ public class UsuariosConfiguration {
     }
 
     @Produces
+    AlterarStatusUsuarioUseCase alterarStatusUsuarioUseCase(UsuarioGateway gateway) {
+        return new AlterarStatusUsuarioUseCase(gateway);
+    }
+
+    @Produces
     UsuariosController usuariosController(
             CriarUsuarioUseCase criarUsuario,
             ListarUsuariosUseCase listarUsuarios,
             BuscarUsuarioUseCase buscarUsuario,
             AtualizarUsuarioUseCase atualizarUsuario,
             InativarUsuarioUseCase inativarUsuario,
+            AlterarStatusUsuarioUseCase alterarStatusUsuario,
             UsuarioPresenterAdapter presenter) {
         return new UsuariosController(
                 criarUsuario,
@@ -53,6 +60,7 @@ public class UsuariosConfiguration {
                 buscarUsuario,
                 atualizarUsuario,
                 inativarUsuario,
+                alterarStatusUsuario,
                 presenter);
     }
 

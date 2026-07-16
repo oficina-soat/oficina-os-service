@@ -43,6 +43,7 @@ class UsuariosResourceTest {
                 .body("tipoPessoa", equalTo("FISICA"))
                 .body("status", equalTo("ATIVO"))
                 .body("papeis", hasItems("mecanico", "recepcionista"))
+                .body("acoesPermitidas", hasItems("ATUALIZAR_DADOS", "BLOQUEAR", "INATIVAR"))
                 .body("criadoEm", notNullValue())
                 .body("atualizadoEm", notNullValue())
                 .body("$", not(hasKey("password")))
@@ -76,7 +77,6 @@ class UsuariosResourceTest {
                         {
                           "nome": "Ana Administradora",
                           "documento": "11144477735",
-                          "status": "BLOQUEADO",
                           "papeis": ["administrativo"]
                         }
                         """)
@@ -86,8 +86,40 @@ class UsuariosResourceTest {
                 .statusCode(200)
                 .body("nome", equalTo("Ana Administradora"))
                 .body("documento", equalTo("11144477735"))
-                .body("status", equalTo("BLOQUEADO"))
+                .body("status", equalTo("ATIVO"))
                 .body("papeis[0]", equalTo("administrativo"));
+
+        given()
+                .queryParam("nome", "ana administra")
+                .queryParam("documento", "11144477735")
+                .queryParam("status", "ATIVO")
+                .queryParam("papel", "administrativo")
+                .when()
+                .get("/api/v1/usuarios")
+                .then()
+                .statusCode(200)
+                .body("items.size()", equalTo(1));
+
+        given()
+                .header("X-Idempotency-Key", "usuario-bloqueio-" + UUID.randomUUID())
+                .contentType("application/json")
+                .body("{}")
+                .when()
+                .post("/api/v1/usuarios/{usuarioId}/bloqueio", usuarioId)
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("BLOQUEADO"))
+                .body("acoesPermitidas", hasItems("ATUALIZAR_DADOS", "REATIVAR", "INATIVAR"));
+
+        given()
+                .header("X-Idempotency-Key", "usuario-reativacao-" + UUID.randomUUID())
+                .contentType("application/json")
+                .body("{}")
+                .when()
+                .post("/api/v1/usuarios/{usuarioId}/reativacao", usuarioId)
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("ATIVO"));
 
         given()
                 .when()

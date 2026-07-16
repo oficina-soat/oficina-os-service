@@ -50,8 +50,12 @@ public class UsuariosResource {
     @GET
     public Uni<PageResponse<UsuarioViewModel>> listar(
             @QueryParam("page") Integer page,
-            @QueryParam("size") Integer size) {
-        return Uni.createFrom().completionStage(controller.listar(page, size));
+            @QueryParam("size") Integer size,
+            @QueryParam("nome") String nome,
+            @QueryParam("documento") String documento,
+            @QueryParam("status") String status,
+            @QueryParam("papel") String papel) {
+        return Uni.createFrom().completionStage(controller.listar(page, size, nome, documento, status, papel));
     }
 
     @GET
@@ -74,5 +78,19 @@ public class UsuariosResource {
         return Uni.createFrom()
                 .completionStage(controller.inativar(usuarioId))
                 .replaceWith(Response.noContent().build());
+    }
+
+    @POST
+    @Path("{usuarioId}/bloqueio")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true)
+    public Uni<UsuarioViewModel> bloquear(@PathParam("usuarioId") UUID usuarioId) {
+        return Uni.createFrom().completionStage(controller.bloquear(usuarioId));
+    }
+
+    @POST
+    @Path("{usuarioId}/reativacao")
+    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true)
+    public Uni<UsuarioViewModel> reativar(@PathParam("usuarioId") UUID usuarioId) {
+        return Uni.createFrom().completionStage(controller.reativar(usuarioId));
     }
 }
