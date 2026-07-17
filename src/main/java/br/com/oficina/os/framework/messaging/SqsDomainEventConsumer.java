@@ -30,7 +30,7 @@ class SqsDomainEventConsumer {
             DomainEventConsumer consumer,
             @ConfigProperty(name = "oficina.messaging.consumer.enabled", defaultValue = "false") boolean consumerEnabled,
             @ConfigProperty(name = "oficina.messaging.consumer.max-messages", defaultValue = "5") int maxMessages,
-            @ConfigProperty(name = "oficina.messaging.consumer.wait-time-seconds", defaultValue = "10") int waitTimeSeconds) {
+            @ConfigProperty(name = "oficina.messaging.consumer.wait-time-seconds", defaultValue = "1") int waitTimeSeconds) {
         this(
                 messagingClient,
                 codec,
@@ -49,7 +49,7 @@ class SqsDomainEventConsumer {
             DomainEventConsumer consumer,
             @ConfigProperty(name = "oficina.messaging.consumer.enabled", defaultValue = "false") boolean consumerEnabled,
             @ConfigProperty(name = "oficina.messaging.consumer.max-messages", defaultValue = "5") int maxMessages,
-            @ConfigProperty(name = "oficina.messaging.consumer.wait-time-seconds", defaultValue = "10") int waitTimeSeconds,
+            @ConfigProperty(name = "oficina.messaging.consumer.wait-time-seconds", defaultValue = "1") int waitTimeSeconds,
             @ConfigProperty(name = "oficina.messaging.consumer.max-receive-count", defaultValue = "5") int maxReceiveCount,
             OperationalMetrics metrics) {
         this.messagingClient = messagingClient;
