@@ -617,6 +617,10 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     }
 
     private SagaRecord processarExecucaoIniciada(SagaRecord saga, DomainEventEnvelope event) {
+        if (saga.estado() != EstadoSaga.AGUARDANDO_APROVACAO && saga.estado() != EstadoSaga.EM_EXECUCAO) {
+            logEvent(LOG, "domain event ignored", event, "INVALID_STATE", saga.ordemServicoId(), correlationId(saga, event));
+            return saga;
+        }
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada", true);
@@ -636,6 +640,11 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     private SagaRecord processarExecucaoFinalizada(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
+        if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO,
+                    "Execucao iniciada por evento finalizado", true);
+            ordem = buscarOrdemServico(saga.ordemServicoId());
+        }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
             ordem = alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada", true);
         }

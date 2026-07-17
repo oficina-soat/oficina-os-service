@@ -178,6 +178,31 @@ class InMemoryAtendimentoGatewayTest {
     }
 
     @Test
+    void deveFinalizarQuandoEventoFinalChegarAntesDoInicioDaExecucao() {
+        var gateway = new InMemoryAtendimentoGateway();
+        var ordem = gateway.criarOrdemServico(
+                AtendimentoGateway.SEED_CLIENTE_ID,
+                AtendimentoGateway.SEED_VEICULO_ID,
+                "Eventos de execução fora de ordem");
+        var ordemServicoId = ordem.ordemServicoId();
+        var execucaoId = UUID.randomUUID();
+
+        gateway.consumirEvento(evento("diagnosticoFinalizado", ordemServicoId, Map.of(
+                PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId,
+                PAYLOAD_EXECUCAO_ID, execucaoId)));
+        gateway.consumirEvento(evento("execucaoFinalizada", ordemServicoId, Map.of(
+                PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId,
+                PAYLOAD_EXECUCAO_ID, execucaoId)));
+        gateway.consumirEvento(evento("execucaoIniciada", ordemServicoId, Map.of(
+                PAYLOAD_ORDEM_SERVICO_ID, ordemServicoId,
+                PAYLOAD_EXECUCAO_ID, execucaoId)));
+
+        assertEquals(TipoDeEstadoDaOrdemDeServico.FINALIZADA,
+                gateway.buscarOrdemServico(ordemServicoId).estado());
+        assertEquals(EstadoSaga.AGUARDANDO_PAGAMENTO, gateway.buscarSaga(ordemServicoId).estado());
+    }
+
+    @Test
     void deveProcessarOrcamentoRecusadoECompensarCancelamentoUmaVez() {
         var gateway = new InMemoryAtendimentoGateway();
         var ordem = gateway.criarOrdemServico(
