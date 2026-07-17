@@ -6,7 +6,6 @@ public enum AcaoPermitidaOrdemServico {
     INICIAR_DIAGNOSTICO,
     CONCLUIR_DIAGNOSTICO,
     RETOMAR_DIAGNOSTICO,
-    INICIAR_EXECUCAO,
     FINALIZAR,
     ENTREGAR,
     INCLUIR_SERVICO,
@@ -17,7 +16,7 @@ public enum AcaoPermitidaOrdemServico {
         return switch (estado) {
             case RECEBIDA -> List.of(INICIAR_DIAGNOSTICO, CANCELAR);
             case EM_DIAGNOSTICO -> List.of(INCLUIR_SERVICO, INCLUIR_PECA, CONCLUIR_DIAGNOSTICO, CANCELAR);
-            case AGUARDANDO_APROVACAO -> List.of(INICIAR_EXECUCAO, RETOMAR_DIAGNOSTICO, CANCELAR);
+            case AGUARDANDO_APROVACAO -> List.of(RETOMAR_DIAGNOSTICO, CANCELAR);
             case EM_EXECUCAO -> List.of(FINALIZAR, CANCELAR);
             case FINALIZADA -> List.of(ENTREGAR);
             case ENTREGUE -> List.of();

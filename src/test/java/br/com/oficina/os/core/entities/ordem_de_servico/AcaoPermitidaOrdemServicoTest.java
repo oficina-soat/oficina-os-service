@@ -21,7 +21,6 @@ class AcaoPermitidaOrdemServicoTest {
                 AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO));
         assertEquals(
                 List.of(
-                        AcaoPermitidaOrdemServico.INICIAR_EXECUCAO,
                         AcaoPermitidaOrdemServico.RETOMAR_DIAGNOSTICO,
                         AcaoPermitidaOrdemServico.CANCELAR),
                 AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO));

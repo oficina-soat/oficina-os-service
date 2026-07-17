@@ -57,7 +57,11 @@ class AtendimentoGatewaySupportTest {
     void deveValidarTransicoesDeEstado() {
         assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.RECEBIDA, TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO));
         assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO));
-        assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO));
+        assertThrows(WebApplicationException.class,
+                () -> validarTransicao(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO));
+        assertDoesNotThrow(() -> AtendimentoGatewaySupport.validarTransicaoPorEvento(
+                TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO,
+                TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO));
         assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO));
         assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, TipoDeEstadoDaOrdemDeServico.FINALIZADA));
         assertDoesNotThrow(() -> validarTransicao(TipoDeEstadoDaOrdemDeServico.FINALIZADA, TipoDeEstadoDaOrdemDeServico.ENTREGUE));

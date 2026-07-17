@@ -22,14 +22,17 @@ class OrdemDeServicoTest {
         ordem.adicionaPeca(1L, "Filtro", new BigDecimal("1"), new BigDecimal("99.99"));
         ordem.adicionaServico(2L, "Troca", new BigDecimal("2"), new BigDecimal("50"));
         ordem.finalizarDiagnostico();
-        ordem.iniciarExecucao();
+        ordem = new OrdemDeServico(
+                ordem.id(), CLIENTE_ID, VEICULO_ID,
+                new EstadoDaOrdemDeServico(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, ordem.dataDoEstado()),
+                ordem.historicoDeEstados(), ordem.pecas(), ordem.servicos());
         ordem.finalizar();
         ordem.entregar();
 
         assertEquals(TipoDeEstadoDaOrdemDeServico.ENTREGUE, ordem.estadoDaOrdemDeServico());
         assertEquals(1, ordem.pecas().size());
         assertEquals(1, ordem.servicos().size());
-        assertEquals(5, ordem.historicoDeEstados().size());
+        assertEquals(4, ordem.historicoDeEstados().size());
     }
 
     @Test
@@ -37,7 +40,7 @@ class OrdemDeServicoTest {
         var ordem = OrdemDeServicoFactory.criarNovo(CLIENTE_ID, VEICULO_ID);
 
         assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::finalizarDiagnostico);
-        assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::iniciarExecucao);
+        assertThrows(EstadoDaOrdemDeServicoInvalidoException.class, ordem::recusarOrcamento);
     }
 
     @Test
