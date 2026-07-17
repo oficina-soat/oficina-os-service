@@ -50,7 +50,7 @@ public final class ConsultarDashboardOperacionalUseCase {
                         ordem.estado(),
                         ordem.descricaoProblema(),
                         entrouNoEstadoEm(ordem.ordemServicoId(), ordem.estado(), ordem.atualizadoEm()),
-                        AcaoPermitidaOrdemServico.porEstado(ordem.estado())))
+                        AcaoPermitidaOrdemServico.porEstado(ordem.estado(), ordem.estadoSaga())))
                 .sorted(Comparator.comparing(OrdemAtencao::entrouNoEstadoEm))
                 .limit(LIMITE_ATENCOES)
                 .toList();

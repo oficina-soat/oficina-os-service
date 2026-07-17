@@ -108,7 +108,8 @@ public interface AtendimentoGateway {
             OffsetDateTime criadoEm,
             OffsetDateTime atualizadoEm,
             List<ItemServicoRecord> servicos,
-            List<ItemPecaRecord> pecas) {
+            List<ItemPecaRecord> pecas,
+            EstadoSaga estadoSaga) {
         public OrdemServicoRecord {
             servicos = servicos == null ? List.of() : List.copyOf(servicos);
             pecas = pecas == null ? List.of() : List.copyOf(pecas);

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
+import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.entities.pessoa.Pessoa;
 import br.com.oficina.os.core.entities.usuario.Usuario;
 import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
@@ -28,7 +29,8 @@ class ConsultarDashboardOperacionalUseCaseTest {
         var ordemId = UUID.randomUUID();
         var ordem = new AtendimentoGateway.OrdemServicoRecord(
                 ordemId, UUID.randomUUID(), UUID.randomUUID(), "Motor falhando",
-                TipoDeEstadoDaOrdemDeServico.RECEBIDA, NOW.minusDays(1), NOW.minusHours(1), List.of(), List.of());
+                TipoDeEstadoDaOrdemDeServico.RECEBIDA, NOW.minusDays(1), NOW.minusHours(1), List.of(), List.of(),
+                EstadoSaga.INICIADA);
         when(atendimento.listarOrdensServico(null)).thenReturn(List.of(ordem));
         when(atendimento.historico(ordemId)).thenReturn(List.of(new AtendimentoGateway.HistoricoRecord(
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA, NOW.minusHours(2), null)));
@@ -71,7 +73,7 @@ class ConsultarDashboardOperacionalUseCaseTest {
                 .mapToObj(index -> new AtendimentoGateway.OrdemServicoRecord(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "Problema " + index,
                         TipoDeEstadoDaOrdemDeServico.FINALIZADA, NOW.minusDays(2), NOW.minusHours(7 - index),
-                        List.of(), List.of()))
+                        List.of(), List.of(), EstadoSaga.AGUARDANDO_PAGAMENTO))
                 .toList();
         when(atendimento.listarOrdensServico(null)).thenReturn(ordens);
         ordens.forEach(ordem -> when(atendimento.historico(ordem.ordemServicoId())).thenReturn(List.of()));

@@ -48,7 +48,7 @@ public class AtendimentoPresenterAdapter {
                         item.servicoId(), item.nome(), item.quantidade(), item.valorUnitario(), item.valorTotal())).toList(),
                 ordem.pecas().stream().map(item -> new OrdemServicoViewModel.ItemPecaViewModel(
                         item.pecaId(), item.nome(), item.quantidade(), item.valorUnitario(), item.valorTotal())).toList(),
-                AcaoPermitidaOrdemServico.porEstado(ordem.estado()));
+                AcaoPermitidaOrdemServico.porEstado(ordem.estado(), ordem.estadoSaga()));
     }
 
     public HistoricoOrdemServicoViewModel historico(HistoricoRecord historico) {

@@ -289,7 +289,7 @@ class AtendimentoResourceTest {
     }
 
     @Test
-    void deveAbrirOrdemServicoAlterarEstadoEConsultarHistorico() {
+    void deveAbrirOrdemServicoRejeitarAtalhoDeEstadoEConsultarHistorico() {
         var ordemServicoId = given()
                 .header("X-Idempotency-Key", "os-create-001")
                 .contentType("application/json")
@@ -327,21 +327,18 @@ class AtendimentoResourceTest {
                 .when()
                 .patch("/api/v1/ordens-servico/{ordemServicoId}/estado", ordemServicoId)
                 .then()
-                .statusCode(200)
-                .body("ordemServicoId", equalTo(ordemServicoId))
-                .body("estado", equalTo("EM_DIAGNOSTICO"));
+                .statusCode(409)
+                .body("code", equalTo("INVALID_STATE_TRANSITION"))
+                .body("message", containsString("use a autoridade do fluxo"));
 
         given()
                 .when()
                 .get("/api/v1/ordens-servico/{ordemServicoId}/historico", ordemServicoId)
                 .then()
                 .statusCode(200)
-                .body("size()", equalTo(2))
+                .body("size()", equalTo(1))
                 .body("[0].estado", equalTo("RECEBIDA"))
-                .body("[0].dataDoEstado", notNullValue())
-                .body("[1].estado", equalTo("EM_DIAGNOSTICO"))
-                .body("[1].dataDoEstado", notNullValue())
-                .body("[1].motivo", equalTo("Diagnostico iniciado"));
+                .body("[0].dataDoEstado", notNullValue());
     }
 
     @Test
