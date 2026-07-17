@@ -5,6 +5,7 @@ import br.com.oficina.os.core.usecases.cliente.AtualizarClienteUseCase;
 import br.com.oficina.os.core.usecases.cliente.BuscarClienteUseCase;
 import br.com.oficina.os.core.usecases.cliente.CriarClienteUseCase;
 import br.com.oficina.os.core.usecases.cliente.ListarClientesUseCase;
+import br.com.oficina.os.core.usecases.dashboard.ConsultarDashboardOperacionalUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.AbrirOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.AlterarEstadoOrdemServicoUseCase;
 import br.com.oficina.os.core.usecases.ordem_de_servico.BuscarOrdemServicoUseCase;
@@ -32,6 +33,13 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 public class AtendimentoConfiguration {
+    @Produces
+    ConsultarDashboardOperacionalUseCase consultarDashboardOperacionalUseCase(
+            AtendimentoGateway atendimentoGateway,
+            br.com.oficina.os.core.interfaces.gateway.UsuarioGateway usuarioGateway) {
+        return new ConsultarDashboardOperacionalUseCase(atendimentoGateway, usuarioGateway);
+    }
+
     @Produces
     CriarClienteUseCase criarClienteUseCase(AtendimentoGateway gateway) {
         return new CriarClienteUseCase(gateway);
