@@ -441,7 +441,6 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
             throw new NotFoundException("Saga da ordem de servico nao encontrada: " + ordemServicoId);
         }
         consumedEventIds.add(event.eventId());
-
         var resultado = switch (event.eventType()) {
             case "diagnosticoIniciado" -> processarDiagnosticoIniciado(saga, event);
             case "diagnosticoFinalizado" -> processarDiagnosticoFinalizado(saga, event);
@@ -539,6 +538,10 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     }
 
     private SagaRecord processarDiagnosticoIniciado(SagaRecord saga, DomainEventEnvelope event) {
+        if (saga.estado() != EstadoSaga.INICIADA && saga.estado() != EstadoSaga.EM_DIAGNOSTICO) {
+            logEvent(LOG, "domain event ignored", event, "INVALID_STATE", saga.ordemServicoId(), correlationId(saga, event));
+            return saga;
+        }
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado");
@@ -558,6 +561,10 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     private SagaRecord processarDiagnosticoFinalizado(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
+        if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado por evento finalizado");
+            ordem = buscarOrdemServico(saga.ordemServicoId());
+        }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
             alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado");
         }

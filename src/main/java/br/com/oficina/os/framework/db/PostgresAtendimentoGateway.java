@@ -899,6 +899,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     private SagaRecord processarDiagnosticoIniciadoPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
+        if (saga.estado() != EstadoSaga.INICIADA && saga.estado() != EstadoSaga.EM_DIAGNOSTICO) {
+            logEvent(LOG, "domain event ignored", event, "INVALID_STATE", saga.ordemServicoId(), correlationId(saga, event));
+            return saga;
+        }
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
             alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado", false);
@@ -918,6 +922,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
 
     private SagaRecord processarDiagnosticoFinalizadoPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
+        if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO,
+                    "Diagnostico iniciado por evento finalizado", false);
+            ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
+        }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
             alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado", false);
         }
