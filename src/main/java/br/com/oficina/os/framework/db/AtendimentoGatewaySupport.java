@@ -69,8 +69,7 @@ final class AtendimentoGatewaySupport {
         boolean valida = switch (atual) {
             case RECEBIDA -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
             case EM_DIAGNOSTICO -> novo == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO;
-            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO
-                    || novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
+            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
             case EM_EXECUCAO -> novo == TipoDeEstadoDaOrdemDeServico.FINALIZADA;
             case FINALIZADA -> novo == TipoDeEstadoDaOrdemDeServico.ENTREGUE;
             case ENTREGUE -> false;
@@ -78,6 +77,14 @@ final class AtendimentoGatewaySupport {
         if (!valida) {
             throw new WebApplicationException("Transicao de estado invalida: " + atual + " -> " + novo, Response.Status.CONFLICT);
         }
+    }
+
+    static void validarTransicaoPorEvento(TipoDeEstadoDaOrdemDeServico atual, TipoDeEstadoDaOrdemDeServico novo) {
+        if (atual == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO
+                && novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
+            return;
+        }
+        validarTransicao(atual, novo);
     }
 
     static String normalizar(String valor) {

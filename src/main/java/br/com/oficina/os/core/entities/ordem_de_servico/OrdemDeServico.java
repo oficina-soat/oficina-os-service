@@ -70,11 +70,6 @@ public class OrdemDeServico {
         alterarEstado(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO);
     }
 
-    public void iniciarExecucao() {
-        exigeAguardandoAprovacao();
-        alterarEstado(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO);
-    }
-
     public void recusarOrcamento() {
         exigeAguardandoAprovacao();
         alterarEstado(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO);

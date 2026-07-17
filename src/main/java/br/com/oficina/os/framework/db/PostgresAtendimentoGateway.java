@@ -819,8 +819,22 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             TipoDeEstadoDaOrdemDeServico novoEstado,
             String motivo,
             boolean finalizarEntrega) throws SQLException {
+        return alterarEstadoPostgres(connection, ordemServicoId, novoEstado, motivo, finalizarEntrega, false);
+    }
+
+    private OrdemServicoRecord alterarEstadoPostgres(
+            Connection connection,
+            UUID ordemServicoId,
+            TipoDeEstadoDaOrdemDeServico novoEstado,
+            String motivo,
+            boolean finalizarEntrega,
+            boolean originadaPorEvento) throws SQLException {
         var atual = buscarOrdemServicoPostgres(connection, ordemServicoId);
-        validarTransicao(atual.estado(), novoEstado);
+        if (originadaPorEvento) {
+            AtendimentoGatewaySupport.validarTransicaoPorEvento(atual.estado(), novoEstado);
+        } else {
+            validarTransicao(atual.estado(), novoEstado);
+        }
         var atualizado = new OrdemServicoRecord(
                 atual.ordemServicoId(),
                 atual.clienteId(),
@@ -941,7 +955,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarExecucaoIniciadaPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
-            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada", false);
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada", false, true);
         }
         return transicionarSagaPostgres(connection, saga, new SagaTransition(
                 EstadoSaga.EM_EXECUCAO,

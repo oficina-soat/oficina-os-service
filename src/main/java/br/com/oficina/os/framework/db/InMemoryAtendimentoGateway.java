@@ -297,8 +297,20 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     @Override
     public synchronized OrdemServicoRecord alterarEstado(UUID ordemServicoId, TipoDeEstadoDaOrdemDeServico novoEstado, String motivo) {
+        return alterarEstado(ordemServicoId, novoEstado, motivo, false);
+    }
+
+    private OrdemServicoRecord alterarEstado(
+            UUID ordemServicoId,
+            TipoDeEstadoDaOrdemDeServico novoEstado,
+            String motivo,
+            boolean originadaPorEvento) {
         var atual = buscarOrdemServico(ordemServicoId);
-        validarTransicao(atual.estado(), novoEstado);
+        if (originadaPorEvento) {
+            AtendimentoGatewaySupport.validarTransicaoPorEvento(atual.estado(), novoEstado);
+        } else {
+            validarTransicao(atual.estado(), novoEstado);
+        }
         var atualizado = new OrdemServicoRecord(
                 atual.ordemServicoId(),
                 atual.clienteId(),
@@ -583,7 +595,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarExecucaoIniciada(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
-            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada");
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada", true);
         }
         return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_EXECUCAO,
