@@ -150,6 +150,8 @@ As rotas abaixo exigem JWT com o papel `administrativo`:
 
 O payload não aceita senha. Cada usuário retorna `acoesPermitidas`, calculadas pelo backend a partir do estado canônico. Os papéis são `administrativo`, `mecanico` e `recepcionista`; o documento operacional deve conter 11 dígitos. Criação, atualização e mudanças de estado persistem o snapshot correspondente na Outbox. Publisher e consumidores usam executores independentes, impedindo que o long polling das filas atrase a publicação. Os eventos não carregam credenciais e alimentam o `oficina-auth-sync-lambda`. O contrato completo está no [Contrato de APIs REST](../oficina-platform/contracts/Contrato%20de%20APIs%20REST.md), no [Contrato de Eventos de Domínio](../oficina-platform/contracts/Contrato%20de%20Eventos%20de%20Dom%C3%ADnio.md) e no [OpenAPI do oficina-os-service](../oficina-platform/contracts/openapi/oficina-os-service.yaml).
 
+Os snapshots `GET /api/v1/dashboard/ordens-servico` e `GET /api/v1/dashboard/usuarios` devolvem contagens e até cinco atenções já selecionadas pelo backend. O segundo é exclusivo do papel `administrativo`; o primeiro aceita os três papéis operacionais.
+
 ## Fail-fast de runtime
 
 O runtime é protegido quando o profile Quarkus ativo contém `prod` ou `lab`, ou quando `DEPLOYMENT_ENVIRONMENT=lab`. Nesses casos, [RuntimeStartupValidator](src/main/java/br/com/oficina/os/framework/web/RuntimeStartupValidator.java) interrompe o startup se houver fallback para memória, mensageria desabilitada, endpoint AWS local, audience divergente ou configuração obrigatória ausente.
