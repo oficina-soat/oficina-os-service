@@ -65,6 +65,7 @@ class PostgresAtendimentoSeedStoreTest {
                 .filter(event -> event.eventType().equals("ordemDeServicoCriada"))
                 .findFirst()
                 .orElseThrow();
+        assertEquals("postgresql@example.com", abertura.payload().get("clienteEmail"));
 
         var reloaded = new AtendimentoSeedStore(dataSource, "postgresql");
         assertEquals("Cliente PostgreSQL", reloaded.buscarCliente(cliente.clienteId()).nome());

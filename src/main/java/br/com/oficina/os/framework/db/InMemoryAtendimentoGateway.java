@@ -171,7 +171,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     @Override
     public synchronized OrdemServicoRecord criarOrdemServico(UUID clienteId, UUID veiculoId, String descricaoProblema) {
-        buscarCliente(clienteId);
+        var cliente = buscarCliente(clienteId);
         var veiculo = buscarVeiculo(veiculoId);
         if (!veiculo.clienteId().equals(clienteId)) {
             throw new WebApplicationException("Veiculo nao pertence ao cliente informado.", Response.Status.CONFLICT);
@@ -197,17 +197,21 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 "Ordem de servico recebida"))));
         var correlationId = correlationId(null);
         criarSagaInicial(ordem.ordemServicoId(), agora, correlationId);
+        var eventoPayload = new LinkedHashMap<String, Object>();
+        eventoPayload.put(PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString());
+        eventoPayload.put("clienteId", clienteId.toString());
+        eventoPayload.put("veiculoId", veiculoId.toString());
+        eventoPayload.put(PAYLOAD_ESTADO_ATUAL, ordem.estado().name());
+        eventoPayload.put("criadoEm", agora.toString());
+        eventoPayload.put("descricaoProblema", ordem.descricaoProblema());
+        if (cliente.email() != null && !cliente.email().isBlank()) {
+            eventoPayload.put("clienteEmail", cliente.email());
+        }
         enfileirarEvento(
                 EVENT_ORDEM_DE_SERVICO_CRIADA,
                 "oficina.os.ordem-de-servico-criada",
                 ordem.ordemServicoId(),
-                Map.of(
-                        PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId().toString(),
-                        "clienteId", clienteId.toString(),
-                        "veiculoId", veiculoId.toString(),
-                        PAYLOAD_ESTADO_ATUAL, ordem.estado().name(),
-                        "criadoEm", agora.toString(),
-                        "descricaoProblema", ordem.descricaoProblema()),
+                eventoPayload,
                 correlationId,
                 agora);
         return ordem;

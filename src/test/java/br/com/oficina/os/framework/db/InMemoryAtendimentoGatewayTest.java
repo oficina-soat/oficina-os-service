@@ -76,6 +76,9 @@ class InMemoryAtendimentoGatewayTest {
 
         var pendentes = gateway.listarEventosPendentesParaPublicacao(0);
         assertFalse(pendentes.isEmpty());
+        assertTrue(pendentes.stream()
+                .filter(event -> event.eventType().equals("ordemDeServicoCriada"))
+                .anyMatch(event -> clienteAtualizado.email().equals(event.payload().get("clienteEmail"))));
 
         var publicado = gateway.marcarEventoPublicado(pendentes.get(0).eventId());
         assertEquals("PUBLISHED", publicado.status());
