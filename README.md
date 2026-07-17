@@ -65,13 +65,18 @@ flowchart LR
   Execution["oficina-execution-service"] --> InboundSNS
   SNS --> Billing
   SNS --> Execution
+  Web -. "métricas, traces e logs" .-> Telemetry["Coletor OTLP"]
 
   classDef core fill:#e5f5ec,stroke:#176b45,color:#14202b;
   classDef adapter fill:#e7f1fa,stroke:#1f5f99,color:#14202b;
-  classDef external fill:#fff3d6,stroke:#7a4b00,color:#14202b;
+  classDef data fill:#fff3d6,stroke:#7a4b00,color:#14202b;
+  classDef event fill:#f3e8ff,stroke:#6b21a8,color:#14202b;
+  classDef observe fill:#fdeaea,stroke:#a22929,color:#14202b;
   class Domain,UseCases,Ports,Saga core;
-  class Web,Controllers,Presenters,JDBC,Messaging adapter;
-  class HTTP,Postgres,SNS,InboundSNS,SQS,Billing,Execution external;
+  class HTTP,Web,Controllers,Presenters,JDBC,Messaging adapter;
+  class Postgres data;
+  class SNS,InboundSNS,SQS,Billing,Execution event;
+  class Telemetry observe;
 ```
 
 O serviço possui ownership de Cliente, Veículo, Ordem de Serviço e da Saga, mas não de catálogo, estoque ou finanças. A sequência e as compensações completas estão em [Fluxos da Saga](../oficina-platform/docs/architecture/saga-flows.md).
