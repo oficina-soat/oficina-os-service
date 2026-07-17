@@ -404,7 +404,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 agora,
                 agora,
                 List.of(),
-                List.of());
+                List.of(),
+                EstadoSaga.INICIADA);
         return inTransaction(connection -> {
             var cliente = buscarClientePostgres(connection, clienteId);
             var veiculo = buscarVeiculoPostgres(connection, veiculoId);
@@ -451,7 +452,12 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             try (var resultSet = statement.executeQuery()) {
                 var result = new ArrayList<OrdemServicoRecord>();
                 while (resultSet.next()) {
-                    result.add(toOrdemServico(resultSet));
+                    var ordem = toOrdemServico(resultSet);
+                    var saga = buscarSagaPostgres(connection, ordem.ordemServicoId());
+                    result.add(new OrdemServicoRecord(
+                            ordem.ordemServicoId(), ordem.clienteId(), ordem.veiculoId(), ordem.descricaoProblema(),
+                            ordem.estado(), ordem.criadoEm(), ordem.atualizadoEm(), ordem.servicos(), ordem.pecas(),
+                            saga == null ? null : saga.estado()));
                 }
                 var composed = new ArrayList<OrdemServicoRecord>();
                 for (var ordem : result) {
@@ -522,7 +528,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                         "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidoEm", agora.toString()),
                 correlationId, agora);
         return carregarComposicao(connection, new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(),
-                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of()));
+                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of(), atual.estadoSaga()));
     }
 
     private OrdemServicoRecord incluirPecaPostgres(Connection connection, UUID ordemServicoId, ItemPecaRecord item,
@@ -550,7 +556,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                         "valorUnitario", item.valorUnitario(), "valorTotal", item.valorTotal()), "incluidaEm", agora.toString()),
                 correlationId, agora);
         return carregarComposicao(connection, new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(),
-                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of()));
+                atual.descricaoProblema(), atual.estado(), atual.criadoEm(), agora, List.of(), List.of(), atual.estadoSaga()));
     }
 
     private OrdemServicoRecord validarComposicao(Connection connection, UUID ordemServicoId) throws SQLException {
@@ -834,6 +840,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             AtendimentoGatewaySupport.validarTransicaoPorEvento(atual.estado(), novoEstado);
         } else {
             validarTransicao(atual.estado(), novoEstado);
+            var saga = buscarSagaPostgres(connection, ordemServicoId);
+            AtendimentoGatewaySupport.validarEntregaLiberada(saga == null ? null : saga.estado());
         }
         var atualizado = new OrdemServicoRecord(
                 atual.ordemServicoId(),
@@ -844,7 +852,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 atual.criadoEm(),
                 OffsetDateTime.now(ZoneOffset.UTC),
                 atual.servicos(),
-                atual.pecas());
+                atual.pecas(),
+                atual.estadoSaga());
         try (var statement = connection.prepareStatement("""
                 UPDATE ordem_de_servico
                 SET estado_atual = ?, atualizado_em = ?
@@ -905,7 +914,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         }
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
-            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado", false);
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado", false, true);
         }
         return transicionarSagaPostgres(connection, saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
@@ -924,11 +933,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
             alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO,
-                    "Diagnostico iniciado por evento finalizado", false);
+                    "Diagnostico iniciado por evento finalizado", false, true);
             ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
-            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado", false);
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado", false, true);
         }
         return transicionarSagaPostgres(connection, saga, new SagaTransition(
                 EstadoSaga.AGUARDANDO_ORCAMENTO,
@@ -946,7 +955,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarOrcamentoRecusadoPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
-            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Orcamento recusado", false);
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Orcamento recusado", false, true);
         }
         return transicionarSagaPostgres(connection, saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
@@ -982,7 +991,7 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarExecucaoFinalizadaPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
-            ordem = alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada", false);
+            ordem = alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada", false, true);
         }
         enfileirarEventoPostgres(
                 connection,
@@ -1297,8 +1306,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 }
             }
         }
+        var saga = buscarSagaPostgres(connection, ordem.ordemServicoId());
         return new OrdemServicoRecord(ordem.ordemServicoId(), ordem.clienteId(), ordem.veiculoId(), ordem.descricaoProblema(),
-                ordem.estado(), ordem.criadoEm(), ordem.atualizadoEm(), servicos, pecas);
+                ordem.estado(), ordem.criadoEm(), ordem.atualizadoEm(), servicos, pecas,
+                saga == null ? ordem.estadoSaga() : saga.estado());
     }
 
     private SagaRecord buscarSagaPostgres(Connection connection, UUID ordemServicoId) throws SQLException {
@@ -1392,7 +1403,8 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 offsetDateTime(resultSet, COLUMN_CRIADO_EM),
                 offsetDateTime(resultSet, COLUMN_ATUALIZADO_EM),
                 List.of(),
-                List.of());
+                List.of(),
+                null);
     }
 
     private SagaRecord toSaga(ResultSet resultSet) throws SQLException {

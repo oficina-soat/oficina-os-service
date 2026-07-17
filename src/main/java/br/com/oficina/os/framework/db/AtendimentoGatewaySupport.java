@@ -66,25 +66,37 @@ final class AtendimentoGatewaySupport {
     }
 
     static void validarTransicao(TipoDeEstadoDaOrdemDeServico atual, TipoDeEstadoDaOrdemDeServico novo) {
-        boolean valida = switch (atual) {
-            case RECEBIDA -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_DIAGNOSTICO -> novo == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO;
-            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
-            case EM_EXECUCAO -> novo == TipoDeEstadoDaOrdemDeServico.FINALIZADA;
-            case FINALIZADA -> novo == TipoDeEstadoDaOrdemDeServico.ENTREGUE;
-            case ENTREGUE -> false;
-        };
+        boolean valida = atual == TipoDeEstadoDaOrdemDeServico.FINALIZADA
+                && novo == TipoDeEstadoDaOrdemDeServico.ENTREGUE;
         if (!valida) {
-            throw new WebApplicationException("Transicao de estado invalida: " + atual + " -> " + novo, Response.Status.CONFLICT);
+            throw new WebApplicationException(
+                    "Transicao de estado invalida na API operacional; use a autoridade do fluxo: " + atual + " -> " + novo,
+                    Response.Status.CONFLICT);
         }
     }
 
     static void validarTransicaoPorEvento(TipoDeEstadoDaOrdemDeServico atual, TipoDeEstadoDaOrdemDeServico novo) {
-        if (atual == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO
-                && novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
-            return;
+        boolean valida = switch (atual) {
+            case RECEBIDA -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO;
+            case EM_DIAGNOSTICO -> novo == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO;
+            case AGUARDANDO_APROVACAO -> novo == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO
+                    || novo == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO;
+            case EM_EXECUCAO -> novo == TipoDeEstadoDaOrdemDeServico.FINALIZADA;
+            case FINALIZADA, ENTREGUE -> false;
+        };
+        if (!valida) {
+            throw new WebApplicationException(
+                    "Transicao por evento invalida: " + atual + " -> " + novo,
+                    Response.Status.CONFLICT);
         }
-        validarTransicao(atual, novo);
+    }
+
+    static void validarEntregaLiberada(EstadoSaga estadoSaga) {
+        if (estadoSaga != EstadoSaga.AGUARDANDO_ENTREGA) {
+            throw new WebApplicationException(
+                    "Entrega permitida somente apos confirmacao do pagamento.",
+                    Response.Status.CONFLICT);
+        }
     }
 
     static String normalizar(String valor) {

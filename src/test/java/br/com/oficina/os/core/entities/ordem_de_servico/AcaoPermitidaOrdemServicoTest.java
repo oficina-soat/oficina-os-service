@@ -10,28 +10,28 @@ class AcaoPermitidaOrdemServicoTest {
     @Test
     void deveDerivarAsAcoesPermitidasDoEstado() {
         assertEquals(
-                List.of(AcaoPermitidaOrdemServico.INICIAR_DIAGNOSTICO, AcaoPermitidaOrdemServico.CANCELAR),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.RECEBIDA));
+                List.of(AcaoPermitidaOrdemServico.CANCELAR),
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.RECEBIDA, EstadoSaga.INICIADA));
         assertEquals(
                 List.of(
                         AcaoPermitidaOrdemServico.INCLUIR_SERVICO,
                         AcaoPermitidaOrdemServico.INCLUIR_PECA,
-                        AcaoPermitidaOrdemServico.CONCLUIR_DIAGNOSTICO,
                         AcaoPermitidaOrdemServico.CANCELAR),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO));
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, EstadoSaga.EM_DIAGNOSTICO));
         assertEquals(
-                List.of(
-                        AcaoPermitidaOrdemServico.RETOMAR_DIAGNOSTICO,
-                        AcaoPermitidaOrdemServico.CANCELAR),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO));
+                List.of(AcaoPermitidaOrdemServico.CANCELAR),
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, EstadoSaga.AGUARDANDO_APROVACAO));
         assertEquals(
-                List.of(AcaoPermitidaOrdemServico.FINALIZAR, AcaoPermitidaOrdemServico.CANCELAR),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO));
-        assertEquals(
-                List.of(AcaoPermitidaOrdemServico.ENTREGAR),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.FINALIZADA));
+                List.of(AcaoPermitidaOrdemServico.CANCELAR),
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, EstadoSaga.EM_EXECUCAO));
         assertEquals(
                 List.of(),
-                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.ENTREGUE));
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.FINALIZADA, EstadoSaga.AGUARDANDO_PAGAMENTO));
+        assertEquals(
+                List.of(AcaoPermitidaOrdemServico.ENTREGAR),
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.FINALIZADA, EstadoSaga.AGUARDANDO_ENTREGA));
+        assertEquals(
+                List.of(),
+                AcaoPermitidaOrdemServico.porEstado(TipoDeEstadoDaOrdemDeServico.ENTREGUE, EstadoSaga.FINALIZADA_COM_SUCESSO));
     }
 }

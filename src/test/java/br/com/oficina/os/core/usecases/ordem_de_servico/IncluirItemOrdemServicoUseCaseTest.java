@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
+import br.com.oficina.os.core.entities.ordem_de_servico.EstadoSaga;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemPecaRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemServicoRecord;
@@ -131,6 +132,7 @@ class IncluirItemOrdemServicoUseCaseTest {
                 now,
                 now,
                 List.of(),
-                List.of());
+                List.of(),
+                EstadoSaga.EM_DIAGNOSTICO);
     }
 }

@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import br.com.oficina.os.core.entities.ordem_de_servico.TipoDeEstadoDaOrdemDeServico;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemPecaRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemServicoRecord;
+import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
 import jakarta.ws.rs.WebApplicationException;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +19,7 @@ class OrdemServicoComposicaoTest {
     @Test
     void devePersistirSnapshotsEEventosDuranteDiagnostico() {
         var gateway = new InMemoryAtendimentoGateway();
-        gateway.alterarEstado(gateway.SEED_ORDEM_SERVICO_ID, TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "inicio");
+        iniciarDiagnostico(gateway);
         var servicoId = UUID.randomUUID();
         var pecaId = UUID.randomUUID();
 
@@ -40,9 +43,20 @@ class OrdemServicoComposicaoTest {
         assertThrows(WebApplicationException.class,
                 () -> gateway.incluirServico(gateway.SEED_ORDEM_SERVICO_ID, item, "corr"));
 
-        gateway.alterarEstado(gateway.SEED_ORDEM_SERVICO_ID, TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "inicio");
+        iniciarDiagnostico(gateway);
         gateway.incluirServico(gateway.SEED_ORDEM_SERVICO_ID, item, "corr");
         assertThrows(WebApplicationException.class,
                 () -> gateway.incluirServico(gateway.SEED_ORDEM_SERVICO_ID, item, "corr"));
+    }
+
+    private static void iniciarDiagnostico(InMemoryAtendimentoGateway gateway) {
+        gateway.consumirEvento(new DomainEventEnvelope(
+                UUID.randomUUID(),
+                "diagnosticoIniciado",
+                1,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "oficina-execution-service",
+                gateway.SEED_ORDEM_SERVICO_ID,
+                Map.of("ordemServicoId", gateway.SEED_ORDEM_SERVICO_ID.toString(), "execucaoId", UUID.randomUUID().toString())));
     }
 }

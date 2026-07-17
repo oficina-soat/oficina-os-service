@@ -68,7 +68,8 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 seedTime,
                 seedTime,
                 List.of(),
-                List.of()));
+                List.of(),
+                EstadoSaga.INICIADA));
         historicos.put(SEED_ORDEM_SERVICO_ID, new ArrayList<>(List.of(new HistoricoRecord(
                 TipoDeEstadoDaOrdemDeServico.RECEBIDA,
                 seedTime,
@@ -189,7 +190,8 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 agora,
                 agora,
                 List.of(),
-                List.of());
+                List.of(),
+                EstadoSaga.INICIADA);
         ordensServico.put(ordem.ordemServicoId(), ordem);
         historicos.put(ordem.ordemServicoId(), new ArrayList<>(List.of(new HistoricoRecord(
                 ordem.estado(),
@@ -222,6 +224,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
         return ordensServico.values().stream()
                 .filter(ordem -> estado == null || ordem.estado() == estado)
                 .sorted(Comparator.comparing(OrdemServicoRecord::criadoEm))
+                .map(this::comEstadoSaga)
                 .toList();
     }
 
@@ -231,7 +234,19 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
         if (ordem == null) {
             throw new NotFoundException("Ordem de servico nao encontrada: " + ordemServicoId);
         }
-        return ordem;
+        return comEstadoSaga(ordem);
+    }
+
+    private OrdemServicoRecord comEstadoSaga(OrdemServicoRecord ordem) {
+        return new OrdemServicoRecord(
+                ordem.ordemServicoId(), ordem.clienteId(), ordem.veiculoId(), ordem.descricaoProblema(),
+                ordem.estado(), ordem.criadoEm(), ordem.atualizadoEm(), ordem.servicos(), ordem.pecas(),
+                estadoSaga(ordem.ordemServicoId(), ordem.estadoSaga()));
+    }
+
+    private EstadoSaga estadoSaga(UUID ordemServicoId, EstadoSaga fallback) {
+        var saga = sagasByOrdemServico.get(ordemServicoId);
+        return saga == null ? fallback : saga.estado();
     }
 
     @Override
@@ -274,7 +289,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
 
     private static OrdemServicoRecord copiarComposicao(OrdemServicoRecord atual, List<ItemServicoRecord> servicos, List<ItemPecaRecord> pecas) {
         return new OrdemServicoRecord(atual.ordemServicoId(), atual.clienteId(), atual.veiculoId(), atual.descricaoProblema(),
-                atual.estado(), atual.criadoEm(), OffsetDateTime.now(ZoneOffset.UTC), servicos, pecas);
+                atual.estado(), atual.criadoEm(), OffsetDateTime.now(ZoneOffset.UTC), servicos, pecas, atual.estadoSaga());
     }
 
     private static Map<String, Object> payloadServico(UUID ordemId, ItemServicoRecord item, OffsetDateTime ocorridoEm) {
@@ -310,6 +325,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
             AtendimentoGatewaySupport.validarTransicaoPorEvento(atual.estado(), novoEstado);
         } else {
             validarTransicao(atual.estado(), novoEstado);
+            AtendimentoGatewaySupport.validarEntregaLiberada(estadoSaga(ordemServicoId, atual.estadoSaga()));
         }
         var atualizado = new OrdemServicoRecord(
                 atual.ordemServicoId(),
@@ -320,7 +336,8 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
                 atual.criadoEm(),
                 OffsetDateTime.now(ZoneOffset.UTC),
                 atual.servicos(),
-                atual.pecas());
+                atual.pecas(),
+                estadoSaga(ordemServicoId, atual.estadoSaga()));
         ordensServico.put(ordemServicoId, atualizado);
         historicos.computeIfAbsent(ordemServicoId, _ -> new ArrayList<>())
                 .add(new HistoricoRecord(novoEstado, atualizado.atualizadoEm(), normalizar(motivo)));
@@ -544,7 +561,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
         }
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
-            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado");
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado", true);
         }
         return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
@@ -562,11 +579,11 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarDiagnosticoFinalizado(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.RECEBIDA) {
-            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado por evento finalizado");
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Diagnostico iniciado por evento finalizado", true);
             ordem = buscarOrdemServico(saga.ordemServicoId());
         }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO) {
-            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado");
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO, "Diagnostico finalizado", true);
         }
         return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.AGUARDANDO_ORCAMENTO,
@@ -584,7 +601,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarOrcamentoRecusado(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
-            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Orcamento recusado");
+            alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_DIAGNOSTICO, "Orcamento recusado", true);
         }
         return transicionarSaga(saga, new SagaTransition(
                 EstadoSaga.EM_DIAGNOSTICO,
@@ -620,7 +637,7 @@ class InMemoryAtendimentoGateway implements AtendimentoGateway {
     private SagaRecord processarExecucaoFinalizada(SagaRecord saga, DomainEventEnvelope event) {
         var ordem = buscarOrdemServico(saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
-            ordem = alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada");
+            ordem = alterarEstado(ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada", true);
         }
         enfileirarEvento(
                 "ordemDeServicoFinalizada",
