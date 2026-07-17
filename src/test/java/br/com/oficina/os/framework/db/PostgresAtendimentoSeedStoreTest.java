@@ -16,6 +16,7 @@ import br.com.oficina.os.core.entities.usuario.UsuarioStatus;
 import br.com.oficina.os.core.exceptions.UsuarioConflitanteException;
 import br.com.oficina.os.core.exceptions.UsuarioNaoEncontradoException;
 import br.com.oficina.os.core.interfaces.messaging.DomainEventEnvelope;
+import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemPecaRecord;
 import br.com.oficina.os.core.interfaces.gateway.AtendimentoGateway.ItemServicoRecord;
 import br.com.oficina.os.framework.idempotency.IdempotencyRecord.ProcessingStatus;
@@ -302,7 +303,36 @@ class PostgresAtendimentoSeedStoreTest {
         assertThrows(NotFoundException.class, () -> store.buscarOrdemServico(ordemInexistente));
     }
 
+    @Test
+    void deveIgnorarDiagnosticoIniciadoAtrasadoNoPostgreSQL() {
+        var ordem = store.criarOrdemServico(
+                AtendimentoGateway.SEED_CLIENTE_ID,
+                AtendimentoGateway.SEED_VEICULO_ID,
+                "Eventos de diagnóstico fora de ordem PostgreSQL");
+        var execucaoId = UUID.randomUUID();
+        var sagaInicial = store.buscarSaga(ordem.ordemServicoId());
+        var diagnosticoIniciadoEm = sagaInicial.atualizadoEm().plusSeconds(1);
+        var diagnosticoFinalizadoEm = diagnosticoIniciadoEm.plusSeconds(1);
+
+        store.consumirEvento(evento("diagnosticoFinalizado", ordem.ordemServicoId(),
+                Map.of("execucaoId", execucaoId.toString()), diagnosticoFinalizadoEm));
+        var saga = store.consumirEvento(evento("diagnosticoIniciado", ordem.ordemServicoId(),
+                Map.of("execucaoId", execucaoId.toString()), diagnosticoIniciadoEm));
+
+        assertEquals(EstadoSaga.AGUARDANDO_ORCAMENTO, saga.estado());
+        assertEquals(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO,
+                store.buscarOrdemServico(ordem.ordemServicoId()).estado());
+    }
+
     private static DomainEventEnvelope evento(String eventType, UUID ordemServicoId, Map<String, Object> payload) {
+        return evento(eventType, ordemServicoId, payload, OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    private static DomainEventEnvelope evento(
+            String eventType,
+            UUID ordemServicoId,
+            Map<String, Object> payload,
+            OffsetDateTime occurredAt) {
         var completePayload = new java.util.LinkedHashMap<String, Object>();
         completePayload.put("ordemServicoId", ordemServicoId.toString());
         completePayload.putAll(payload);
@@ -310,7 +340,7 @@ class PostgresAtendimentoSeedStoreTest {
                 UUID.randomUUID(),
                 eventType,
                 1,
-                OffsetDateTime.now(ZoneOffset.UTC),
+                occurredAt,
                 producer(eventType),
                 ordemServicoId,
                 completePayload);

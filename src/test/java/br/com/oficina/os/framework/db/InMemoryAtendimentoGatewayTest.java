@@ -154,6 +154,30 @@ class InMemoryAtendimentoGatewayTest {
     }
 
     @Test
+    void deveIgnorarDiagnosticoIniciadoAtrasadoSemRegredirSaga() {
+        var gateway = new InMemoryAtendimentoGateway();
+        var ordem = gateway.criarOrdemServico(
+                AtendimentoGateway.SEED_CLIENTE_ID,
+                AtendimentoGateway.SEED_VEICULO_ID,
+                "Eventos de diagnóstico fora de ordem");
+        var execucaoId = UUID.randomUUID();
+        var sagaInicial = gateway.buscarSaga(ordem.ordemServicoId());
+        var diagnosticoIniciadoEm = sagaInicial.atualizadoEm().plusSeconds(1);
+        var diagnosticoFinalizadoEm = diagnosticoIniciadoEm.plusSeconds(1);
+
+        gateway.consumirEvento(evento("diagnosticoFinalizado", ordem.ordemServicoId(), Map.of(
+                PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId(),
+                PAYLOAD_EXECUCAO_ID, execucaoId), diagnosticoFinalizadoEm));
+        var saga = gateway.consumirEvento(evento("diagnosticoIniciado", ordem.ordemServicoId(), Map.of(
+                PAYLOAD_ORDEM_SERVICO_ID, ordem.ordemServicoId(),
+                PAYLOAD_EXECUCAO_ID, execucaoId), diagnosticoIniciadoEm));
+
+        assertEquals(EstadoSaga.AGUARDANDO_ORCAMENTO, saga.estado());
+        assertEquals(TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO,
+                gateway.buscarOrdemServico(ordem.ordemServicoId()).estado());
+    }
+
+    @Test
     void deveProcessarOrcamentoRecusadoECompensarCancelamentoUmaVez() {
         var gateway = new InMemoryAtendimentoGateway();
         var ordem = gateway.criarOrdemServico(
@@ -192,11 +216,19 @@ class InMemoryAtendimentoGatewayTest {
     }
 
     private static DomainEventEnvelope evento(String eventType, UUID ordemServicoId, Map<String, Object> payload) {
+        return evento(eventType, ordemServicoId, payload, OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    private static DomainEventEnvelope evento(
+            String eventType,
+            UUID ordemServicoId,
+            Map<String, Object> payload,
+            OffsetDateTime occurredAt) {
         return new DomainEventEnvelope(
                 UUID.randomUUID(),
                 eventType,
                 1,
-                OffsetDateTime.now(ZoneOffset.UTC),
+                occurredAt,
                 "oficina-test",
                 ordemServicoId,
                 payload);
