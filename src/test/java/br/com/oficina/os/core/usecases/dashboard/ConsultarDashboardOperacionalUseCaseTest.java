@@ -63,6 +63,41 @@ class ConsultarDashboardOperacionalUseCaseTest {
                 .filter(item -> item.status() == UsuarioStatus.BLOQUEADO).findFirst().orElseThrow().quantidade());
     }
 
+    @Test
+    void usaAtualizacaoComoFallbackELimitaAtencoes() {
+        var atendimento = mock(AtendimentoGateway.class);
+        var usuarios = mock(UsuarioGateway.class);
+        var ordens = java.util.stream.IntStream.range(0, 7)
+                .mapToObj(index -> new AtendimentoGateway.OrdemServicoRecord(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "Problema " + index,
+                        TipoDeEstadoDaOrdemDeServico.FINALIZADA, NOW.minusDays(2), NOW.minusHours(7 - index),
+                        List.of(), List.of()))
+                .toList();
+        when(atendimento.listarOrdensServico(null)).thenReturn(ordens);
+        ordens.forEach(ordem -> when(atendimento.historico(ordem.ordemServicoId())).thenReturn(List.of()));
+
+        var result = useCase(atendimento, usuarios).executar().join();
+
+        assertEquals(5, result.atencoes().size());
+        assertEquals(NOW.minusHours(7), result.atencoes().getFirst().entrouNoEstadoEm());
+    }
+
+    @Test
+    void ignoraUsuariosAtivosNasAtencoes() {
+        var atendimento = mock(AtendimentoGateway.class);
+        var usuarios = mock(UsuarioGateway.class);
+        var ativo = mock(Usuario.class);
+        when(ativo.status()).thenReturn(UsuarioStatus.ATIVO);
+        when(usuarios.listar()).thenReturn(List.of(ativo));
+
+        var result = new ConsultarDashboardOperacionalUseCase(atendimento, usuarios)
+                .executarUsuarios().join();
+
+        assertEquals(0, result.atencoes().size());
+        assertEquals(1, result.contagensPorStatus().stream()
+                .filter(item -> item.status() == UsuarioStatus.ATIVO).findFirst().orElseThrow().quantidade());
+    }
+
     private ConsultarDashboardOperacionalUseCase useCase(
             AtendimentoGateway atendimento,
             UsuarioGateway usuarios) {
