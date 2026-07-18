@@ -971,6 +971,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     private SagaRecord processarExecucaoIniciadaPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
+        if (saga.estado() != EstadoSaga.AGUARDANDO_APROVACAO && saga.estado() != EstadoSaga.EM_EXECUCAO) {
+            logEvent(LOG, "domain event ignored", event, "INVALID_STATE", saga.ordemServicoId(), correlationId(saga, event));
+            return saga;
+        }
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
             alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO, "Execucao iniciada", false, true);
@@ -990,6 +994,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
 
     private SagaRecord processarExecucaoFinalizadaPostgres(Connection connection, SagaRecord saga, DomainEventEnvelope event) throws SQLException {
         var ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
+        if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.AGUARDANDO_APROVACAO) {
+            alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO,
+                    "Execucao iniciada por evento finalizado", false, true);
+            ordem = buscarOrdemServicoPostgres(connection, saga.ordemServicoId());
+        }
         if (ordem.estado() == TipoDeEstadoDaOrdemDeServico.EM_EXECUCAO) {
             ordem = alterarEstadoPostgres(connection, ordem.ordemServicoId(), TipoDeEstadoDaOrdemDeServico.FINALIZADA, "Execucao finalizada", false, true);
         }

@@ -324,6 +324,26 @@ class PostgresAtendimentoSeedStoreTest {
                 store.buscarOrdemServico(ordem.ordemServicoId()).estado());
     }
 
+    @Test
+    void deveFinalizarQuandoEventoFinalChegarAntesDoInicioDaExecucaoNoPostgreSQL() {
+        var ordem = store.criarOrdemServico(
+                AtendimentoGateway.SEED_CLIENTE_ID,
+                AtendimentoGateway.SEED_VEICULO_ID,
+                "Eventos de execução fora de ordem PostgreSQL");
+        var execucaoId = UUID.randomUUID();
+
+        store.consumirEvento(evento("diagnosticoFinalizado", ordem.ordemServicoId(),
+                Map.of("execucaoId", execucaoId.toString())));
+        store.consumirEvento(evento("execucaoFinalizada", ordem.ordemServicoId(),
+                Map.of("execucaoId", execucaoId.toString())));
+        var saga = store.consumirEvento(evento("execucaoIniciada", ordem.ordemServicoId(),
+                Map.of("execucaoId", execucaoId.toString())));
+
+        assertEquals(TipoDeEstadoDaOrdemDeServico.FINALIZADA,
+                store.buscarOrdemServico(ordem.ordemServicoId()).estado());
+        assertEquals(EstadoSaga.AGUARDANDO_PAGAMENTO, saga.estado());
+    }
+
     private static DomainEventEnvelope evento(String eventType, UUID ordemServicoId, Map<String, Object> payload) {
         return evento(eventType, ordemServicoId, payload, OffsetDateTime.now(ZoneOffset.UTC));
     }
