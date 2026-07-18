@@ -112,6 +112,24 @@ class OperationalMetricsTest {
     }
 
     @Test
+    void devePreservarMetricasSemTimestampELimitarDuracaoNegativa() {
+        var outboxStartedAt = metrics.startOutboxAttempt("eventoA", "topico-a");
+        metrics.outboxPublished("eventoA", "topico-a", outboxStartedAt);
+        metrics.outboxPublished(
+                "eventoA", "topico-a", outboxStartedAt,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(1));
+
+        var consumedAt = metrics.startSqsProcessing("fila-a", "topico-a");
+        metrics.sqsConsumed("fila-a", "topico-a", "eventoA", consumedAt);
+
+        assertEquals(2, registry.get("outbox.published.count").counter().count());
+        assertEquals(1, registry.get("outbox.pending.duration").timer().count());
+        assertEquals(0, registry.get("outbox.pending.duration").timer().totalTime(java.util.concurrent.TimeUnit.NANOSECONDS));
+        assertEquals(1, registry.get("messaging.events.consumed.count").counter().count());
+        assertEquals(1, registry.get("messaging.events.processing.duration").timer().count());
+    }
+
+    @Test
     void deveRegistrarRetriesEConflitosDeIdempotencia() {
         metrics.idempotencyRetry("post", "retryable");
         metrics.idempotencyConflict("post", "payload_mismatch");
