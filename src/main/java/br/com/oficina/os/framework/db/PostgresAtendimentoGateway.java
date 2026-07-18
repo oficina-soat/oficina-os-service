@@ -53,6 +53,25 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             ORDER BY created_at
             LIMIT ?
             """;
+    private static final String SQL_CLAIM_PENDING_OUTBOX = """
+            WITH candidates AS (
+                SELECT id FROM outbox_event
+                WHERE status = ?
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+                  AND (claim_until IS NULL OR claim_until <= ?)
+                ORDER BY created_at
+                FOR UPDATE SKIP LOCKED
+                LIMIT ?
+            )
+            UPDATE outbox_event AS outbox
+            SET claim_owner = ?, claim_until = ?
+            FROM candidates
+            WHERE outbox.id = candidates.id
+            RETURNING outbox.id, outbox.aggregate_id, outbox.event_type, outbox.event_version,
+                      outbox.topic, outbox.producer, outbox.payload, outbox.status,
+                      outbox.correlation_id, outbox.occurred_at, outbox.created_at,
+                      outbox.published_at, outbox.attempts, outbox.last_error
+            """;
     private static final String SQL_SELECT_OUTBOX_BY_ID_FOR_UPDATE = """
             SELECT id, aggregate_id, event_type, event_version, topic, producer, payload, status,
                    correlation_id, occurred_at, created_at, published_at, attempts, last_error
@@ -62,13 +81,15 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             """;
     private static final String SQL_MARK_OUTBOX_PUBLISHED = """
             UPDATE outbox_event
-            SET status = ?, published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL
-            WHERE id = ?
+            SET status = ?, published_at = ?, attempts = ?, next_attempt_at = NULL, last_error = NULL,
+                claim_owner = NULL, claim_until = NULL
+            WHERE id = ? AND (? IS NULL OR claim_owner = ?)
             """;
     private static final String SQL_MARK_OUTBOX_FAILURE = """
             UPDATE outbox_event
-            SET status = ?, attempts = ?, next_attempt_at = ?, last_error = ?, published_at = NULL
-            WHERE id = ?
+            SET status = ?, attempts = ?, next_attempt_at = ?, last_error = ?, published_at = NULL,
+                claim_owner = NULL, claim_until = NULL
+            WHERE id = ? AND (? IS NULL OR claim_owner = ?)
             """;
 
     private final DataSource dataSource;
@@ -183,13 +204,47 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     @Override
+    public List<OutboxEventRecord> reivindicarEventosPendentes(
+            int limit, String claimOwner, OffsetDateTime claimUntil) {
+        return inTransaction(connection -> {
+            var now = OffsetDateTime.now(ZoneOffset.UTC);
+            try (var statement = connection.prepareStatement(SQL_CLAIM_PENDING_OUTBOX)) {
+                statement.setString(1, STATUS_PENDING);
+                statement.setObject(2, now);
+                statement.setObject(3, now);
+                statement.setInt(4, Math.max(1, limit));
+                statement.setString(5, claimOwner);
+                statement.setObject(6, claimUntil);
+                try (var resultSet = statement.executeQuery()) {
+                    var claimed = new ArrayList<OutboxEventRecord>();
+                    while (resultSet.next()) {
+                        claimed.add(toOutboxEvent(resultSet));
+                    }
+                    return List.copyOf(claimed);
+                }
+            }
+        });
+    }
+
+    @Override
     public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
         return marcarEventoPublicadoPostgres(eventId);
     }
 
     @Override
+    public OutboxEventRecord marcarEventoPublicado(UUID eventId, String claimOwner) {
+        return marcarEventoPublicadoPostgres(eventId, claimOwner);
+    }
+
+    @Override
     public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
         return marcarFalhaPublicacaoPostgres(eventId, lastError, nextAttemptAt, failed);
+    }
+
+    @Override
+    public OutboxEventRecord marcarFalhaPublicacao(
+            UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed, String claimOwner) {
+        return marcarFalhaPublicacaoPostgres(eventId, lastError, nextAttemptAt, failed, claimOwner);
     }
 
     @Override
@@ -662,6 +717,10 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
     }
 
     private OutboxEventRecord marcarEventoPublicadoPostgres(UUID eventId) {
+        return marcarEventoPublicadoPostgres(eventId, null);
+    }
+
+    private OutboxEventRecord marcarEventoPublicadoPostgres(UUID eventId, String claimOwner) {
         var publicado = inTransaction(connection -> {
             var event = buscarOutboxPorIdParaUpdate(connection, eventId);
             var agora = OffsetDateTime.now(ZoneOffset.UTC);
@@ -685,7 +744,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 statement.setObject(2, updated.publishedAt());
                 statement.setInt(3, updated.attempts());
                 statement.setObject(4, updated.eventId());
-                statement.executeUpdate();
+                statement.setString(5, claimOwner);
+                statement.setString(6, claimOwner);
+                if (statement.executeUpdate() != 1) {
+                    throw new IllegalStateException("Claim da Outbox nao pertence a esta replica: " + eventId);
+                }
             }
             return updated;
         });
@@ -698,6 +761,15 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
             String lastError,
             OffsetDateTime nextAttemptAt,
             boolean failed) {
+        return marcarFalhaPublicacaoPostgres(eventId, lastError, nextAttemptAt, failed, null);
+    }
+
+    private OutboxEventRecord marcarFalhaPublicacaoPostgres(
+            UUID eventId,
+            String lastError,
+            OffsetDateTime nextAttemptAt,
+            boolean failed,
+            String claimOwner) {
         var status = failed ? STATUS_FAILED : STATUS_PENDING;
         var updated = inTransaction(connection -> {
             var event = buscarOutboxPorIdParaUpdate(connection, eventId);
@@ -722,7 +794,11 @@ class PostgresAtendimentoGateway implements AtendimentoGateway {
                 statement.setObject(3, failed ? null : nextAttemptAt);
                 statement.setString(4, failure.lastError());
                 statement.setObject(5, failure.eventId());
-                statement.executeUpdate();
+                statement.setString(6, claimOwner);
+                statement.setString(7, claimOwner);
+                if (statement.executeUpdate() != 1) {
+                    throw new IllegalStateException("Claim da Outbox nao pertence a esta replica: " + eventId);
+                }
             }
             return failure;
         });
