@@ -189,38 +189,40 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
     }
 
     @Override
-    public List<OutboxEventRecord> listarOutbox() {
-        return persistence(OUTBOX, "list", delegate::listarOutbox);
-    }
+    public List<OutboxEventRecord> listarOutbox() { return persistence(OUTBOX, "list", delegate::listarOutbox); }
+    @Override
+    public List<OutboxEventRecord> publicarEventosPendentes() { return persistence(OUTBOX, "publish_pending_local", delegate::publicarEventosPendentes); }
+    @Override
+    public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) { return delegate.listarEventosPendentesParaPublicacao(limit); }
 
     @Override
-    public List<OutboxEventRecord> publicarEventosPendentes() {
-        return persistence(OUTBOX, "publish_pending_local", delegate::publicarEventosPendentes);
+    public List<OutboxEventRecord> reivindicarEventosPendentes(
+            int limit, String claimOwner, OffsetDateTime claimUntil) {
+        return persistence(OUTBOX, "claim", () -> delegate.reivindicarEventosPendentes(limit, claimOwner, claimUntil));
     }
+    @Override
+    public OutboxEventRecord marcarEventoPublicado(UUID eventId) { return delegate.marcarEventoPublicado(eventId); }
 
     @Override
-    public List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit) {
-        return persistence(OUTBOX, "list_pending", () -> delegate.listarEventosPendentesParaPublicacao(limit));
-    }
-
-    @Override
-    public OutboxEventRecord marcarEventoPublicado(UUID eventId) {
-        return persistence(OUTBOX, "mark_published", () -> delegate.marcarEventoPublicado(eventId));
-    }
-
+    public OutboxEventRecord marcarEventoPublicado(UUID eventId, String owner) { return delegate.marcarEventoPublicado(eventId, owner); }
     @Override
     public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed) {
         return persistence(OUTBOX, "mark_failure", () -> delegate.marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed));
     }
 
     @Override
+    public OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String error, OffsetDateTime next, boolean failed, String owner) {
+        return persistence(OUTBOX, "mark_failure", () -> delegate.marcarFalhaPublicacao(eventId, error, next, failed, owner));
+    }
+    @Override
     public SagaRecord consumirEvento(DomainEventEnvelope event) {
-        var previous = delegate.buscarSaga(event.aggregateId());
+        var ordemServicoId = AtendimentoGatewaySupport.uuidFromPayload(
+                event.payload(), AtendimentoGatewaySupport.PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
+        var previous = delegate.buscarSaga(ordemServicoId);
         var current = persistence("consumed_event", "consume", () -> delegate.consumirEvento(event));
         sagaObservability.observe(previous, current);
         return current;
     }
-
     private <T> T persistence(String resource, String operation, java.util.function.Supplier<T> action) {
         return metrics.persistence(database, resource, operation, action);
     }

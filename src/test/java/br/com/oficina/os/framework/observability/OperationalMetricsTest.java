@@ -71,7 +71,9 @@ class OperationalMetricsTest {
                 Map.of("pagamentoConfirmado", 2L),
                 OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(10));
         var startedAt = metrics.startOutboxAttempt("pagamentoConfirmado", "oficina.billing.pagamento-confirmado");
-        metrics.outboxPublished("pagamentoConfirmado", "oficina.billing.pagamento-confirmado", startedAt);
+        metrics.outboxPublished(
+                "pagamentoConfirmado", "oficina.billing.pagamento-confirmado", startedAt,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(2));
         metrics.outboxFailed("pagamentoConfirmado", "oficina.billing.pagamento-confirmado", "publish_failure");
 
         assertEquals(2, registry.get("outbox.pending.count")
@@ -81,6 +83,7 @@ class OperationalMetricsTest {
         assertTrue(registry.get("outbox.oldest.pending.age").gauge().value() >= 9);
         assertEquals(1, registry.get("outbox.publish.attempts.count").counter().count());
         assertEquals(1, registry.get("outbox.published.count").counter().count());
+        assertEquals(1, registry.get("outbox.pending.duration").timer().count());
         assertEquals(1, registry.get("outbox.failed.count").counter().count());
 
         metrics.observeOutbox(Map.of(), null);
@@ -91,7 +94,9 @@ class OperationalMetricsTest {
     @Test
     void deveRegistrarConsumoFalhaEDlqPorFila() {
         var consumedAt = metrics.startSqsProcessing("fila-a", "topico-a");
-        metrics.sqsConsumed("fila-a", "topico-a", "eventoA", consumedAt);
+        metrics.sqsConsumed(
+                "fila-a", "topico-a", "eventoA", consumedAt,
+                OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(2));
         var failedAt = metrics.startSqsProcessing("fila-a", "topico-a");
         metrics.sqsFailed("fila-a", "topico-a", "eventoA", "processing_failure", true, failedAt);
 
@@ -103,6 +108,25 @@ class OperationalMetricsTest {
                 .count());
         assertEquals(1, registry.get("messaging.dlq.count").tag("queue", "fila-a").counter().count());
         assertEquals(2, registry.get("messaging.events.processing.duration").tag("queue", "fila-a").timer().count());
+        assertEquals(1, registry.get("messaging.events.delivery.latency").tag("queue", "fila-a").timer().count());
+    }
+
+    @Test
+    void devePreservarMetricasSemTimestampELimitarDuracaoNegativa() {
+        var outboxStartedAt = metrics.startOutboxAttempt("eventoA", "topico-a");
+        metrics.outboxPublished("eventoA", "topico-a", outboxStartedAt);
+        metrics.outboxPublished(
+                "eventoA", "topico-a", outboxStartedAt,
+                OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(1));
+
+        var consumedAt = metrics.startSqsProcessing("fila-a", "topico-a");
+        metrics.sqsConsumed("fila-a", "topico-a", "eventoA", consumedAt);
+
+        assertEquals(2, registry.get("outbox.published.count").counter().count());
+        assertEquals(1, registry.get("outbox.pending.duration").timer().count());
+        assertEquals(0, registry.get("outbox.pending.duration").timer().totalTime(java.util.concurrent.TimeUnit.NANOSECONDS));
+        assertEquals(1, registry.get("messaging.events.consumed.count").counter().count());
+        assertEquals(1, registry.get("messaging.events.processing.duration").timer().count());
     }
 
     @Test

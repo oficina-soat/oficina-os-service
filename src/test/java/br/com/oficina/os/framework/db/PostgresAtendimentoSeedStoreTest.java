@@ -53,6 +53,41 @@ class PostgresAtendimentoSeedStoreTest {
     DataSource dataSource;
 
     @Test
+    void deveCoordenarClaimDaOutboxEntreReplicasERecuperarLeaseExpirado() {
+        var now = OffsetDateTime.now(ZoneOffset.UTC);
+        var ordem = store.criarOrdemServico(
+                AtendimentoGateway.SEED_CLIENTE_ID,
+                AtendimentoGateway.SEED_VEICULO_ID,
+                "Validar claim da Outbox");
+        var eventId = store.listarOutbox().stream()
+                .filter(event -> event.aggregateId().equals(ordem.ordemServicoId()))
+                .findFirst()
+                .orElseThrow()
+                .eventId();
+
+        var firstClaim = store.reivindicarEventosPendentes(100, "replica-a", now.plusMinutes(1));
+        var concurrentClaim = store.reivindicarEventosPendentes(100, "replica-b", now.plusMinutes(1));
+
+        assertTrue(firstClaim.stream().anyMatch(candidate -> candidate.eventId().equals(eventId)));
+        assertTrue(concurrentClaim.stream().noneMatch(candidate -> candidate.eventId().equals(eventId)));
+        assertThrows(IllegalStateException.class, () -> store.marcarEventoPublicado(eventId, "replica-b"));
+
+        try (var connection = dataSource.getConnection();
+                var statement = connection.prepareStatement(
+                        "UPDATE outbox_event SET claim_until = ? WHERE id = ?")) {
+            statement.setObject(1, now.minusSeconds(1));
+            statement.setObject(2, eventId);
+            statement.executeUpdate();
+        } catch (java.sql.SQLException exception) {
+            throw new IllegalStateException(exception);
+        }
+
+        var recovered = store.reivindicarEventosPendentes(100, "replica-b", now.plusMinutes(1));
+        assertTrue(recovered.stream().anyMatch(candidate -> candidate.eventId().equals(eventId)));
+        assertEquals("PUBLISHED", store.marcarEventoPublicado(eventId, "replica-b").status());
+    }
+
+    @Test
     void devePersistirAtendimentoSagaInboxEOutboxEmPostgreSQL() {
         var cliente = store.criarCliente(
                 "Cliente PostgreSQL",

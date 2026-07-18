@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import br.com.oficina.os.core.interfaces.messaging.OutboxEventRecord;
 import io.quarkus.runtime.Startup;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class DomainMessagingWorkerTest {
@@ -36,7 +38,7 @@ class DomainMessagingWorkerTest {
         var worker = new DomainMessagingWorker(publisher, consumer, false, 1);
 
         assertDoesNotThrow(() -> invokeTick(worker, "publishTick"));
-        assertDoesNotThrow(() -> invokeTick(worker, "consumeTick"));
+        assertDoesNotThrow(() -> invokeConsumeTick(worker, DomainMessagingRoutes.consumedTopics().getFirst()));
 
         assertEquals(1, publisher.publishCalls);
         assertEquals(1, consumer.consumeCalls);
@@ -49,7 +51,7 @@ class DomainMessagingWorkerTest {
         var worker = new DomainMessagingWorker(publisher, consumer, false, 1);
 
         assertDoesNotThrow(() -> invokeTick(worker, "publishTick"));
-        assertDoesNotThrow(() -> invokeTick(worker, "consumeTick"));
+        assertDoesNotThrow(() -> invokeConsumeTick(worker, DomainMessagingRoutes.consumedTopics().getFirst()));
 
         assertEquals(1, publisher.publishCalls);
         assertEquals(1, consumer.consumeCalls);
@@ -68,15 +70,39 @@ class DomainMessagingWorkerTest {
         assertDoesNotThrow(worker::stop);
     }
 
+    @Test
+    void filaBloqueadaNaoDeveImpedirOutraFila() throws InterruptedException {
+        var topics = DomainMessagingRoutes.consumedTopics();
+        var consumer = new BlockingSqsDomainEventConsumer(topics.getFirst(), topics.get(1));
+        var publisher = new CountingOutboxPublisher(false);
+        var worker = new DomainMessagingWorker(
+                publisher, consumer, true, 50, 100);
+
+        worker.start();
+        try {
+            assertTrue(consumer.otherQueuePolled.await(2, TimeUnit.SECONDS));
+            assertTrue(publisher.publishCalled.await(2, TimeUnit.SECONDS));
+        } finally {
+            worker.stop();
+        }
+    }
+
     private static void invokeTick(DomainMessagingWorker worker, String methodName) throws ReflectiveOperationException {
         var tick = DomainMessagingWorker.class.getDeclaredMethod(methodName);
         tick.setAccessible(true);
         tick.invoke(worker);
     }
 
+    private static void invokeConsumeTick(DomainMessagingWorker worker, String topic) throws ReflectiveOperationException {
+        var tick = DomainMessagingWorker.class.getDeclaredMethod("consumeTick", String.class);
+        tick.setAccessible(true);
+        tick.invoke(worker, topic);
+    }
+
     private static final class CountingOutboxPublisher extends OutboxPublisher {
         private final boolean fail;
         private int publishCalls;
+        private final CountDownLatch publishCalled = new CountDownLatch(1);
 
         private CountingOutboxPublisher(boolean fail) {
             super(null, null, null, null, false, 0, 0, 0);
@@ -86,6 +112,7 @@ class DomainMessagingWorkerTest {
         @Override
         public List<OutboxEventRecord> publicarPendentes() {
             publishCalls++;
+            publishCalled.countDown();
             if (fail) {
                 throw new IllegalStateException("publisher failed");
             }
@@ -104,6 +131,38 @@ class DomainMessagingWorkerTest {
         int consumirDisponiveis() {
             consumeCalls++;
             return 1;
+        }
+
+        @Override
+        int consumirDisponiveis(String topic) {
+            consumeCalls++;
+            return 1;
+        }
+    }
+
+    private static final class BlockingSqsDomainEventConsumer extends SqsDomainEventConsumer {
+        private final String blockedTopic;
+        private final String observedTopic;
+        private final CountDownLatch otherQueuePolled = new CountDownLatch(1);
+
+        private BlockingSqsDomainEventConsumer(String blockedTopic, String observedTopic) {
+            super(null, null, null, false, 0, 0);
+            this.blockedTopic = blockedTopic;
+            this.observedTopic = observedTopic;
+        }
+
+        @Override
+        int consumirDisponiveis(String topic) {
+            if (blockedTopic.equals(topic)) {
+                try {
+                    new CountDownLatch(1).await();
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
+                }
+            } else if (observedTopic.equals(topic)) {
+                otherQueuePolled.countDown();
+            }
+            return 0;
         }
     }
 }

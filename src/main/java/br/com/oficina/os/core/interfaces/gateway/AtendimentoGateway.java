@@ -60,9 +60,23 @@ public interface AtendimentoGateway {
 
     List<OutboxEventRecord> listarEventosPendentesParaPublicacao(int limit);
 
+    default List<OutboxEventRecord> reivindicarEventosPendentes(
+            int limit, String claimOwner, OffsetDateTime claimUntil) {
+        return listarEventosPendentesParaPublicacao(limit);
+    }
+
     OutboxEventRecord marcarEventoPublicado(UUID eventId);
 
+    default OutboxEventRecord marcarEventoPublicado(UUID eventId, String claimOwner) {
+        return marcarEventoPublicado(eventId);
+    }
+
     OutboxEventRecord marcarFalhaPublicacao(UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed);
+
+    default OutboxEventRecord marcarFalhaPublicacao(
+            UUID eventId, String lastError, OffsetDateTime nextAttemptAt, boolean failed, String claimOwner) {
+        return marcarFalhaPublicacao(eventId, lastError, nextAttemptAt, failed);
+    }
 
     SagaRecord consumirEvento(DomainEventEnvelope event);
 
