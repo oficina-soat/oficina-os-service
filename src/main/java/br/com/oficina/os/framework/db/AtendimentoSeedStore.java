@@ -215,7 +215,9 @@ public class AtendimentoSeedStore implements AtendimentoGateway {
 
     @Override
     public SagaRecord consumirEvento(DomainEventEnvelope event) {
-        var previous = delegate.buscarSaga(event.aggregateId());
+        var ordemServicoId = AtendimentoGatewaySupport.uuidFromPayload(
+                event.payload(), AtendimentoGatewaySupport.PAYLOAD_ORDEM_SERVICO_ID, event.aggregateId());
+        var previous = delegate.buscarSaga(ordemServicoId);
         var current = persistence("consumed_event", "consume", () -> delegate.consumirEvento(event));
         sagaObservability.observe(previous, current);
         return current;
