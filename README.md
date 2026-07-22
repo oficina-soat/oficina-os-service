@@ -81,6 +81,61 @@ flowchart LR
 
 O serviço possui ownership de Cliente, Veículo, Ordem de Serviço e da Saga, mas não de catálogo, estoque ou finanças. A sequência e as compensações completas estão em [Fluxos da Saga](../oficina-platform/docs/architecture/saga-flows.md).
 
+## Fluxos do serviço
+
+### Recepção e diagnóstico
+
+```mermaid
+flowchart LR
+  Recepcao["Recepção cadastra cliente e veículo"] --> OS["OS RECEBIDA"]
+  OS --> Evento["ordemDeServicoCriada"]
+  Evento --> Execution["Execution cria projeção técnica"]
+  Execution --> Inicio["Mecânico inicia diagnóstico"]
+  Inicio --> Itens["Inclui peças e serviços"]
+  Itens --> Fim["Finaliza diagnóstico"]
+  Fim --> Orquestrador["OS avança a Saga"]
+  Orquestrador --> Aprovacao["AGUARDANDO_APROVACAO"]
+```
+
+```mermaid
+sequenceDiagram
+  actor R as Recepcionista
+  participant OS as oficina-os-service
+  participant EX as oficina-execution-service
+  participant BI as oficina-billing-service
+  R->>OS: abre Ordem de Serviço
+  OS-->>EX: ordemDeServicoCriada
+  EX-->>OS: diagnosticoIniciado
+  EX-->>OS: itens e diagnosticoFinalizado
+  EX-->>BI: diagnosticoFinalizado
+  BI-->>OS: orcamentoGerado
+  OS->>OS: estado AGUARDANDO_APROVACAO
+```
+
+### Orquestração após a decisão
+
+```mermaid
+sequenceDiagram
+  participant BI as Billing
+  participant OS as OS / Saga
+  participant EX as Execution
+  alt orçamento aprovado
+    BI-->>OS: orcamentoAprovado
+    BI-->>EX: orcamentoAprovado
+    EX-->>OS: execucaoIniciada
+    OS->>OS: estado EM_EXECUCAO
+    EX-->>OS: execucaoFinalizada
+    OS->>OS: estado FINALIZADA
+  else orçamento recusado
+    BI-->>OS: orcamentoRecusado
+    BI-->>EX: orcamentoRecusado
+    OS->>OS: estado EM_DIAGNOSTICO
+    EX->>EX: retomada do diagnóstico
+  end
+```
+
+O serviço produz eventos de OS e de encerramento da Saga e consome os eventos financeiros do Billing e técnicos do Execution. O roteamento, inclusive tópicos e filas por consumidor, está na [tabela canônica de mensageria](../oficina-platform/contracts/Contrato%20de%20T%C3%B3picos%20de%20Mensageria.md#tabela-can%C3%B4nica-de-roteamento), e a colaboração completa está na [visão transversal da plataforma](../oficina-platform/README.md#fluxos-operacionais).
+
 ## Setup local
 
 Pré-requisitos:
